@@ -267,12 +267,15 @@ git push
      - If nearest pivot is <$80 away, find next major pivot
      - If all pivots >$500 away, use "hold"
 
-5. **Target Calculation** (Based on stop distance)
+5. **Target Calculation** (Based on market structure)
    - Calculate risk distance: |entry - stop|
-   - Target = 2x to 3x the risk distance
-   - Ratio range: 2:1 to 3:1 reward-to-risk
-   - Choose multiplier based on next significant level
-   - If no good target exists → use "hold"
+   - Find next significant support/resistance level
+   - Target should naturally fall within 2x to 3x the risk distance
+   - **Ratio boundaries:** 2:1 to 3:1 reward-to-risk (min to max)
+   - These are flexible boundaries, NOT strict targets
+   - Any ratio in range is acceptable (2.1:1, 2.5:1, 2.8:1, etc.)
+   - Use actual market levels, don't force artificial targets
+   - If no significant level exists within range → use "hold"
 
 ### Trade Level Validation
 
@@ -288,9 +291,11 @@ Before executing any trade, the bot validates ALL of these criteria:
    - Example rejection: Stop $2 away → "Stop too tight: $2.13 (minimum $80)"
 
 3. **Risk-Reward Ratio:**
-   - Minimum: 2:1 (risk $100 to make $200+)
+   - Minimum: 2:1 (risk $100 to make $200)
    - Maximum: 3:1 (risk $100 to make $300)
-   - Example rejection: 28:1 ratio with $2 stop → "Stop too tight"
+   - Any ratio in range is valid: 2.1:1, 2.5:1, 2.8:1, etc.
+   - These are boundaries, not strict targets
+   - Example rejection: 1.5:1 ratio → "Risk-reward too low: 1.50:1 (minimum 2:1)"
 
 If ANY validation fails:
 - Trade is rejected and not executed
