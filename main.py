@@ -254,17 +254,27 @@ def manage_positions(positions_data, trade_data, current_price, csv_data):
     # Position management logic
     if current_status == "none":
         if new_signal == "buy":
-            result = execute_paper_trade(
-                "open_long", current_price, positions_data,
-                trade_data.get("stop_loss"), trade_data.get("take_profit")
-            )
-            results.append(result)
+            # Validate trade levels before executing
+            is_valid, error_msg = validate_trade_levels(trade_data, current_price)
+            if not is_valid:
+                results.append({"success": False, "message": f"⚠️ Invalid trade levels: {error_msg}"})
+            else:
+                result = execute_paper_trade(
+                    "open_long", current_price, positions_data,
+                    trade_data.get("stop_loss"), trade_data.get("take_profit")
+                )
+                results.append(result)
         elif new_signal == "sell":
-            result = execute_paper_trade(
-                "open_short", current_price, positions_data,
-                trade_data.get("stop_loss"), trade_data.get("take_profit")
-            )
-            results.append(result)
+            # Validate trade levels before executing
+            is_valid, error_msg = validate_trade_levels(trade_data, current_price)
+            if not is_valid:
+                results.append({"success": False, "message": f"⚠️ Invalid trade levels: {error_msg}"})
+            else:
+                result = execute_paper_trade(
+                    "open_short", current_price, positions_data,
+                    trade_data.get("stop_loss"), trade_data.get("take_profit")
+                )
+                results.append(result)
         elif new_signal == "hold":
             results.append({"success": True, "message": "⚪ No position | Signal: HOLD"})
 
@@ -277,11 +287,17 @@ def manage_positions(positions_data, trade_data, current_price, csv_data):
             # Close long, open short
             result1 = execute_paper_trade("close_long", current_price, positions_data)
             results.append(result1)
-            result2 = execute_paper_trade(
-                "open_short", current_price, positions_data,
-                trade_data.get("stop_loss"), trade_data.get("take_profit")
-            )
-            results.append(result2)
+
+            # Validate before opening short
+            is_valid, error_msg = validate_trade_levels(trade_data, current_price)
+            if not is_valid:
+                results.append({"success": False, "message": f"⚠️ Invalid trade levels: {error_msg}"})
+            else:
+                result2 = execute_paper_trade(
+                    "open_short", current_price, positions_data,
+                    trade_data.get("stop_loss"), trade_data.get("take_profit")
+                )
+                results.append(result2)
         elif new_signal == "hold":
             result = execute_paper_trade("close_long", current_price, positions_data)
             results.append(result)
@@ -295,11 +311,17 @@ def manage_positions(positions_data, trade_data, current_price, csv_data):
             # Close short, open long
             result1 = execute_paper_trade("close_short", current_price, positions_data)
             results.append(result1)
-            result2 = execute_paper_trade(
-                "open_long", current_price, positions_data,
-                trade_data.get("stop_loss"), trade_data.get("take_profit")
-            )
-            results.append(result2)
+
+            # Validate before opening long
+            is_valid, error_msg = validate_trade_levels(trade_data, current_price)
+            if not is_valid:
+                results.append({"success": False, "message": f"⚠️ Invalid trade levels: {error_msg}"})
+            else:
+                result2 = execute_paper_trade(
+                    "open_long", current_price, positions_data,
+                    trade_data.get("stop_loss"), trade_data.get("take_profit")
+                )
+                results.append(result2)
         elif new_signal == "hold":
             result = execute_paper_trade("close_short", current_price, positions_data)
             results.append(result)
@@ -482,20 +504,26 @@ Provide a JSON object with this EXACT structure:
 
 CRITICAL RULES for stop_loss and take_profit:
 - MUST use actual price levels from the data above
-- For BUY:
-  * stop_loss = recent low from the data (or slightly below it)
-  * take_profit = recent high from the data (or slightly above it)
-- For SELL:
-  * stop_loss = recent high from the data (or slightly above it)
-  * take_profit = recent low from the data (or slightly below it)
+- For BUY (LONG):
+  * stop_loss = recent low from the data (or slightly below it) - MUST BE BELOW ENTRY
+  * take_profit = recent high from the data (or slightly above it) - MUST BE ABOVE ENTRY
+  * Rule: stop_loss < entry_price < take_profit
+- For SELL (SHORT):
+  * stop_loss = recent high from the data (or slightly above it) - MUST BE ABOVE ENTRY
+  * take_profit = recent low from the data (or slightly below it) - MUST BE BELOW ENTRY
+  * Rule: take_profit < entry_price < stop_loss
 - If action is "hold", set stop_loss and take_profit to null
 - Stop-loss should be 20-100 dollars away from entry (not thousands!)
 - Take-profit should be 50-200 dollars away from entry (realistic for 30min scalping)
 - Confidence: higher = stronger signal (>70 = strong, 50-70 = moderate, <50 = weak)
 
 Example: If data shows high of 122150 and low of 121900, and current price is 122000:
-- BUY trade: entry=122000, stop_loss=121890 (below recent low), take_profit=122160 (above recent high)
-- SELL trade: entry=122000, stop_loss=122160 (above recent high), take_profit=121890 (below recent low)"""
+- BUY trade: entry=122000, stop_loss=121890 (BELOW entry), take_profit=122160 (ABOVE entry)
+- SELL trade: entry=122000, stop_loss=122160 (ABOVE entry), take_profit=121890 (BELOW entry)
+
+DOUBLE-CHECK before responding:
+- BUY: Is stop < entry < target? ✓
+- SELL: Is target < entry < stop? ✓"""
 
     response = client.chat.completions.create(
         model="gpt-4o-mini",
@@ -530,6 +558,41 @@ def parse_llm_response(response_text):
 
     # Fallback: return full text as analysis, no trade data
     return response_text, None
+
+
+def validate_trade_levels(trade_data, current_price):
+    """Validate that stop-loss and take-profit levels make sense
+
+    Returns:
+        tuple: (is_valid, error_message)
+    """
+    if not trade_data or trade_data.get('action') == 'hold':
+        return True, None
+
+    action = trade_data.get('action')
+    entry = current_price  # We use current price as entry
+    stop = trade_data.get('stop_loss')
+    target = trade_data.get('take_profit')
+
+    # Check that levels exist
+    if stop is None or target is None:
+        return False, "Missing stop_loss or take_profit"
+
+    # For BUY (long): stop < entry < target
+    if action == 'buy':
+        if stop >= entry:
+            return False, f"LONG: stop_loss (${stop:,.2f}) must be BELOW entry (${entry:,.2f})"
+        if target <= entry:
+            return False, f"LONG: take_profit (${target:,.2f}) must be ABOVE entry (${entry:,.2f})"
+
+    # For SELL (short): target < entry < stop
+    elif action == 'sell':
+        if target >= entry:
+            return False, f"SHORT: take_profit (${target:,.2f}) must be BELOW entry (${entry:,.2f})"
+        if stop <= entry:
+            return False, f"SHORT: stop_loss (${stop:,.2f}) must be ABOVE entry (${entry:,.2f})"
+
+    return True, None
 
 
 def send_to_discord(analysis, webhook_url, chart_image, trade_data=None, trade_results=None, positions_data=None):
