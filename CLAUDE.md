@@ -276,12 +276,27 @@ git push
 
 ### Trade Level Validation
 
-Before executing any trade, the bot validates that stop-loss and take-profit levels are logically correct:
+Before executing any trade, the bot validates ALL of these criteria:
 
-- **For LONG trades:** stop_loss < entry_price < take_profit
-- **For SHORT trades:** take_profit < entry_price < stop_loss
+1. **Direction Check:**
+   - For LONG trades: stop_loss < entry_price < take_profit
+   - For SHORT trades: take_profit < entry_price < stop_loss
 
-If validation fails, the trade is rejected and an error message is logged. This prevents executing trades with inverted or illogical levels.
+2. **Stop Distance Constraints:**
+   - Minimum: $80 (prevents overly tight stops)
+   - Maximum: $500 (keeps stops reasonable)
+   - Example rejection: Stop $2 away → "Stop too tight: $2.13 (minimum $80)"
+
+3. **Risk-Reward Ratio:**
+   - Minimum: 2:1 (risk $100 to make $200+)
+   - Maximum: 3:1 (risk $100 to make $300)
+   - Example rejection: 28:1 ratio with $2 stop → "Stop too tight"
+
+If ANY validation fails:
+- Trade is rejected and not executed
+- Error message appears in Discord
+- Discord shows "⚠️ Trade Rejected" instead of invalid levels
+- Bot prevents bad trades even if ChatGPT generates them
 
 ### Position Management Logic
 
