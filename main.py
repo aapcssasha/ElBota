@@ -527,16 +527,23 @@ def send_to_discord(analysis, webhook_url, chart_image, trade_data=None, trade_r
         wins = positions_data.get("winning_trades", 0)
         losses = positions_data.get("losing_trades", 0)
         win_rate = (wins / total * 100) if total > 0 else 0
-        ratio = (wins / losses) if losses > 0 else wins
+
+        # Calculate average win/loss from trade history
+        trade_history = positions_data.get("trade_history", [])
+        total_profit = sum(t["profit_loss"] for t in trade_history if t["profit_loss"] > 0)
+        total_loss = abs(sum(t["profit_loss"] for t in trade_history if t["profit_loss"] < 0))
+        avg_win = (total_profit / wins) if wins > 0 else 0
+        avg_loss = (total_loss / losses) if losses > 0 else 0
+        avg_ratio = (avg_win / avg_loss) if avg_loss > 0 else avg_win
 
         full_description += f"\n\n**📈 Paper Trading Stats:**"
         full_description += f"\n💰 Balance: ${balance:,.2f}"
         full_description += f"\n📊 Trades: {total} ({wins}W / {losses}L)"
         if total > 0:
             if losses > 0:
-                full_description += f"\n📊 W:L Ratio: {ratio:.1f}:1"
+                full_description += f"\n📊 Avg W:L: {avg_ratio:.2f}:1 (avg win: ${avg_win:.2f}, avg loss: ${avg_loss:.2f})"
             else:
-                full_description += f"\n📊 W:L Ratio: {wins}:0 (Perfect!)"
+                full_description += f"\n📊 Avg W:L: Perfect! (${avg_win:.2f} avg win, no losses)"
             full_description += f"\n🎯 Win Rate: {win_rate:.1f}%"
 
     # Format as Discord embed for better readability
@@ -594,15 +601,22 @@ if __name__ == "__main__":
         wins = positions_data.get("winning_trades", 0)
         losses = positions_data.get("losing_trades", 0)
         win_rate = (wins / total * 100) if total > 0 else 0
-        ratio = (wins / losses) if losses > 0 else wins
+
+        # Calculate average win/loss from trade history
+        trade_history = positions_data.get("trade_history", [])
+        total_profit = sum(t["profit_loss"] for t in trade_history if t["profit_loss"] > 0)
+        total_loss = abs(sum(t["profit_loss"] for t in trade_history if t["profit_loss"] < 0))
+        avg_win = (total_profit / wins) if wins > 0 else 0
+        avg_loss = (total_loss / losses) if losses > 0 else 0
+        avg_ratio = (avg_win / avg_loss) if avg_loss > 0 else avg_win
 
         print(f"\n📈 Paper Trading Stats:")
         print(f"   💰 Balance: ${balance:,.2f}")
         print(f"   📊 Trades: {total} ({wins}W / {losses}L)")
         if losses > 0:
-            print(f"   📊 W:L Ratio: {ratio:.1f}:1")
+            print(f"   📊 Avg W:L: {avg_ratio:.2f}:1 (avg win: ${avg_win:.2f}, avg loss: ${avg_loss:.2f})")
         else:
-            print(f"   📊 W:L Ratio: {wins}:0 (Perfect!)")
+            print(f"   📊 Avg W:L: Perfect! (${avg_win:.2f} avg win, no losses)")
         print(f"   🎯 Win Rate: {win_rate:.1f}%")
 
     # Fetch the data

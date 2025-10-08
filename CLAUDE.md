@@ -697,6 +697,127 @@ This software is for educational purposes only. Cryptocurrency trading carries s
 
 ---
 
-**Last Updated:** 2025-10-07
-**Version:** 1.0 (Phase 1 Complete)
+## 🤖 GitHub Actions Deployment
+
+### Setup (One-Time)
+
+**Repository:** https://github.com/aapcssasha/ElBota (Public)
+
+**Why Public:**
+- Unlimited GitHub Actions minutes (private repos limited to 2,000 min/month)
+- Bot runs every 15 minutes = ~2,880 min/month
+- positions.json is visible but contains paper trading data only (not sensitive)
+
+### Configuration
+
+**1. Secrets (Required):**
+Go to: https://github.com/aapcssasha/ElBota/settings/secrets/actions
+
+Add these secrets:
+- `OPENAI_API_KEY` - Your OpenAI API key
+- `DISCORD_WEBHOOK_URL` - Your Discord webhook URL
+
+**2. Workflow Permissions (Required):**
+Go to: https://github.com/aapcssasha/ElBota/settings/actions
+
+- Select: **"Read and write permissions"**
+- This allows the bot to commit positions.json back to the repo
+
+### How It Works
+
+**Workflow File:** `.github/workflows/trading-bot.yml`
+
+**Schedule:** Every 15 minutes (`cron: '*/15 * * * *'`)
+
+**Workflow Steps:**
+1. Checkout repository
+2. Install Python 3.13
+3. Install dependencies from requirements.txt
+4. Run main.py with secrets as environment variables
+5. Auto-commit positions.json with updated state
+6. Push commit back to GitHub
+
+**Result:** 96 commits per day (one every 15 minutes)
+
+### Monitoring
+
+**View Workflow Runs:**
+https://github.com/aapcssasha/ElBota/actions
+
+**Check Discord:**
+Bot sends notification every 15 minutes with:
+- Technical analysis
+- Chart with entry/stop/target lines
+- Position updates (opened/closed/holding)
+- Paper trading statistics
+
+**Check positions.json:**
+Latest state visible in GitHub repo (auto-updated by bot)
+
+### Running Locally + GitHub Sync
+
+**Pull latest state before local run:**
+```bash
+cd /Users/alejandro/Documents/trading
+git pull origin main  # Get latest positions.json from GitHub
+python main.py        # Run locally
+git add positions.json
+git commit -m "Manual run"
+git push              # GitHub Actions will use this on next run
+```
+
+**Note:** Rarely needed - just let GitHub Actions handle everything!
+
+---
+
+## 📊 Performance Metrics Explained
+
+### Average Win/Loss Ratio (Avg W:L)
+
+**What it shows:** Average dollar amount won per winning trade vs average dollar amount lost per losing trade
+
+**Example:**
+```
+Trades: 4 (2W / 2L)
+Win 1: +$84.11
+Win 2: +$98.78
+Loss 1: -$24.31
+Loss 2: -$16.24
+
+Avg Win = ($84.11 + $98.78) / 2 = $91.44
+Avg Loss = ($24.31 + $16.24) / 2 = $20.28
+Avg W:L = $91.44 / $20.28 = 4.51:1
+```
+
+**Interpretation:** For every $1 lost, the bot makes $4.51 on winning trades
+
+**Why it's better than simple W:L count:**
+- Shows actual profitability, not just win frequency
+- A 3.0:1 ratio means you can have 25% win rate and still be profitable!
+- Industry standard metric for trading systems
+
+### Win Rate
+
+**Formula:** (Winning Trades / Total Trades) × 100
+
+**Example:** 50% means half of all trades are winners
+
+**Note:** Win rate alone is misleading - you can have 90% win rate but lose money if your losses are huge!
+
+### Paper Trading Balance
+
+**Starting balance:** $10,000 (fake money)
+**Updated:** After every trade based on profit/loss
+**Purpose:** Test strategy performance before risking real money
+
+**Next Steps:**
+- Run for 30+ days
+- If consistently profitable (Avg W:L > 2:1 and positive balance growth)
+- Consider going live with small amounts on Coinbase
+
+---
+
+**Last Updated:** 2025-10-08
+**Version:** 2.0 (GitHub Actions Deployed + Position Management)
 **Maintained By:** Alejandro + Claude Code
+**Repository:** https://github.com/aapcssasha/ElBota
