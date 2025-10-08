@@ -361,12 +361,13 @@ def fetch_btc_data():
     return output.getvalue()
 
 
-def generate_chart(data, trade_data=None):
+def generate_chart(data, trade_data=None, trade_invalid=False):
     """Generate candlestick chart from OHLCV data and return as bytes
 
     Args:
         data: CSV string with OHLCV data
         trade_data: Dict with entry_price, stop_loss, take_profit (optional)
+        trade_invalid: Boolean indicating if trade was rejected by validation
     """
     # Parse the data into a pandas DataFrame
     lines = data.strip().split('\n')[1:]  # Skip header
@@ -450,14 +451,31 @@ def generate_chart(data, trade_data=None):
         'style': style,
         'volume': True,
         'title': 'BTC/USD 1min Chart (Last 60 min)',
-        'savefig': dict(fname=buf, dpi=150, bbox_inches='tight')
+        'returnfig': True  # Return figure object so we can add text
     }
 
     # Only add hlines if we have trade data
     if hlines_dict:
         plot_kwargs['hlines'] = hlines_dict
 
-    mpf.plot(df, **plot_kwargs)
+    fig, axes = mpf.plot(df, **plot_kwargs)
+
+    # Add "INVALID TRADE" text overlay if trade was rejected
+    if trade_invalid and trade_data and trade_data.get('action') != 'hold':
+        # Add text to the main price chart (axes[0])
+        ax = axes[0]
+        # Position text at top-right of chart
+        ax.text(0.98, 0.95, 'INVALID TRADE',
+                transform=ax.transAxes,
+                fontsize=16,
+                fontweight='bold',
+                color='#FF5252',  # Red
+                bbox=dict(boxstyle='round,pad=0.5', facecolor='#1e1e1e', edgecolor='#FF5252', linewidth=2),
+                ha='right', va='top',
+                zorder=1000)
+
+    # Save figure to buffer
+    fig.savefig(buf, dpi=150, bbox_inches='tight')
     buf.seek(0)
     return buf
 
@@ -896,8 +914,16 @@ if __name__ == "__main__":
     save_positions(positions_data)
     print("💾 Position state saved\n")
 
-    # Generate chart with trade levels
-    chart_image = generate_chart(data, trade_data)
+    # Check if trade was rejected by validation
+    trade_invalid = False
+    if trade_results:
+        for result in trade_results:
+            if not result.get('success', True) and "Invalid trade levels" in result.get('message', ''):
+                trade_invalid = True
+                break
+
+    # Generate chart with trade levels (and invalid flag if rejected)
+    chart_image = generate_chart(data, trade_data, trade_invalid)
 
     # Send to Discord
     webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
