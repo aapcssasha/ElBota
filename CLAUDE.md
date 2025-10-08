@@ -9,7 +9,7 @@
 ## 🎯 What This Bot Does
 
 Automated BTC trading bot that:
-1. Fetches BTC/USD 1-minute candles from Coinbase Exchange API (last 30 minutes)
+1. Fetches BTC/USD 1-minute candles from Coinbase Exchange API (last 60 minutes)
 2. Sends data to ChatGPT (gpt-4o-mini) for technical analysis
 3. Gets trading recommendation (BUY/SELL/HOLD) with entry, stop-loss, and take-profit levels
 4. Executes **paper trades** (simulated, no real money)
@@ -31,7 +31,7 @@ Automated BTC trading bot that:
    └─> positions.json (current position, trade history, balance)
 
 2. FETCH DATA
-   └─> Coinbase API: Last 30 x 1-min BTC/USD candles (OHLCV)
+   └─> Coinbase API: Last 60 x 1-min BTC/USD candles (OHLCV)
 
 3. CHECK STOP/TARGET
    └─> Analyze candle highs/lows since entry time
@@ -209,14 +209,17 @@ git push
 
 ### Stop-Loss and Take-Profit Detection
 
-**Method:** Checks candle highs/lows (not just current price)
+**Method:** Checks candle highs/lows chronologically (not just current price)
 
-- **For LONG:** Check if any candle's **high** hit take-profit OR **low** hit stop-loss
-- **For SHORT:** Check if any candle's **low** hit take-profit OR **high** hit stop-loss
+- **For LONG:** Check each candle's **high** for take-profit, then **low** for stop-loss
+- **For SHORT:** Check each candle's **low** for take-profit, then **high** for stop-loss
 - **Timeframe:** Only checks candles after entry_time
-- **Why:** Catches targets hit between 15-minute runs
+- **Order matters:** Checks target first, then stop, in chronological order by candle
+- **Why:** Catches targets/stops hit between 15-minute runs and respects price action order
 
 **Example:** Entered long at $122,000 with target $122,200. If any candle between entry and now had high ≥ $122,200, target is hit (even if current price is $122,100).
+
+**Recent fix:** Updated to check chronologically (candle by candle) rather than checking all highs then all lows. This ensures if both target and stop are hit in the same candle, the one that would have been hit first based on price movement is recorded.
 
 ### Chart Timezone
 
@@ -227,13 +230,22 @@ git push
 ### ChatGPT Prompt Strategy
 
 - **Model:** gpt-4o-mini (cheap, fast)
-- **Context:** 30 minutes of 1-min candles (OHLCV data)
+- **Context:** 60 minutes of 1-min candles (OHLCV data)
 - **Focus:** SHORT-TERM SCALPING (not swing trading)
 - **Output:** Dual format
   1. Human-readable analysis (for Discord)
   2. Structured JSON (action, entry, stop, target, confidence)
 
 **Key instruction:** Stop/target must be based on actual support/resistance levels from the data (not percentage-based).
+
+### Trade Level Validation
+
+Before executing any trade, the bot validates that stop-loss and take-profit levels are logically correct:
+
+- **For LONG trades:** stop_loss < entry_price < take_profit
+- **For SHORT trades:** take_profit < entry_price < stop_loss
+
+If validation fails, the trade is rejected and an error message is logged. This prevents executing trades with inverted or illogical levels.
 
 ### Position Management Logic
 
@@ -265,10 +277,17 @@ State machine prevents duplicates:
 - [x] Stop/target detection (candle-based)
 - [x] GitHub Actions automation
 - [x] Performance metrics tracking
+- [x] Trade level validation (prevents inverted stops/targets)
 
-### 🧪 In Progress
-- [ ] **Backtesting** - Running paper trades to validate strategy (30+ days needed)
-- [ ] **Performance analysis** - Tracking Avg W:L, win rate, drawdown
+### 🧪 In Progress - Paper Trading Results
+**Current Stats (as of 2025-10-08):**
+- ✅ **42 trades** completed (exceeds 30+ goal)
+- ✅ **59.5% win rate** (25W/17L) - exceeds 40% goal
+- ✅ **$10,901.69 balance** (+$901.69 profit, +9.02% gain)
+- ⏳ **Avg W:L ratio:** Being calculated from trade history
+- ⏳ **Running time:** Need 30+ days of consistent performance
+
+**Status:** Strategy is performing well. Need more time to validate consistency before going live.
 
 ### 🚀 Future (After Successful Backtesting)
 - [ ] **Go live on Coinbase** - Start with small amounts ($50-100)
@@ -300,7 +319,7 @@ State machine prevents duplicates:
 - **Exchange:** Coinbase Exchange API (free, public endpoint)
 - **Pair:** BTC-USD
 - **Timeframe:** 1-minute candles
-- **Amount:** Last 30 candles
+- **Amount:** Last 60 candles (1 hour of data)
 - **Delay:** ~20 seconds (nearly real-time)
 
 ### Cost Breakdown
