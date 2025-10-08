@@ -355,8 +355,11 @@ def generate_chart(data, trade_data=None):
     candles = []
     for line in lines:
         parts = line.split(',')
+        # Create UTC timestamp, convert to local time
+        utc_time = pd.to_datetime(int(parts[0]), unit='s', utc=True)
+        local_time = utc_time.tz_convert('America/New_York').tz_localize(None)  # Convert to ET and remove timezone
         candles.append({
-            'timestamp': pd.to_datetime(int(parts[0]), unit='s'),
+            'timestamp': local_time,
             'open': float(parts[1]),
             'high': float(parts[2]),
             'low': float(parts[3]),
