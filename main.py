@@ -501,18 +501,26 @@ Current BTC price: ${current_price:,.2f}
    - In a DOWNTREND: Wait for bounces to ~50% of the previous swing down, then SELL
    - Example: Price goes from $122,000 → $122,400 (+$400), pulls back to $122,200 (50% retrace) → BUY signal
 
-4. **RISK-REWARD RATIO** (CRITICAL - Must follow):
-   - Minimum 2:1 reward-to-risk ratio (risk $100 to make $200+)
-   - Prefer 3:1 or 4:1 when strong zones exist
-   - NEVER trade if ratio is poor (like risking $400 to make $100) → use "hold" instead
-   - It's OK to risk $100 with tight stop if target is $300-400 at a strong zone
+4. **STOP-LOSS PLACEMENT** (CRITICAL - Do this FIRST):
+   - After determining direction (BUY/SELL), find the STRONGEST pivot point from the data
+   - For LONG: Find the most significant swing LOW or support zone (tested 2+ times or strong bounce)
+   - For SHORT: Find the most significant swing HIGH or resistance zone (tested 2+ times or strong rejection)
+   - Place stop just beyond this pivot (5-20 dollars past it)
+   - The stop MUST be at a real pivot, not an arbitrary price
+
+5. **TARGET CALCULATION** (Based on stop distance):
+   - Calculate risk distance: |entry - stop|
+   - Target distance MUST be 2x to 3x the risk distance
+   - Minimum ratio: 1:2 (risk $100, make $200) = 2:1 reward-to-risk
+   - Maximum ratio: 1:3 (risk $100, make $300) = 3:1 reward-to-risk
+   - If no good target exists within this ratio → use "hold"
 
 ---
 
 Provide TWO outputs:
 
 1. ANALYSIS (for traders):
-Identify strongest support/resistance zones, check for false breakouts, analyze trend/wave structure. Give clear BUY/SELL/HOLD recommendation with reasoning. Mention which pattern you're seeing (false breakout, wave trading, range, etc.).
+Identify strongest support/resistance zones, check for false breakouts, analyze trend/wave structure. Give clear BUY/SELL/HOLD recommendation with reasoning. IMPORTANT: Mention which pivot point you're using for the stop-loss and why it's significant (e.g., "Stop below $121,880 pivot - tested 3 times as support").
 
 2. TRADE_DATA (for execution):
 {{
@@ -525,30 +533,49 @@ Identify strongest support/resistance zones, check for false breakouts, analyze 
 
 ⚠️ CRITICAL: Output PURE JSON ONLY. NO COMMENTS. Do NOT add // text after values.
 
-RULES for stop_loss and take_profit:
-- MUST use STRONG support/resistance zones from the data (tested multiple times or high consolidation)
-- Stop-loss = just beyond the nearest strong zone (tight but safe)
-- Take-profit = next major support/resistance zone (with good risk-reward ratio)
+STEP-BY-STEP PROCESS:
 
+Step 1: Determine trade direction (BUY/SELL/HOLD) based on patterns above
+
+Step 2: FIND THE STOP-LOSS (Most important step!)
 For BUY (LONG):
-  * stop_loss = below nearest STRONG support zone - MUST BE BELOW ENTRY
-  * take_profit = at/near next STRONG resistance zone - MUST BE ABOVE ENTRY
-  * Rule: stop_loss < entry_price < take_profit
-  * Example: Entry $122,000, Strong support at $121,950, Strong resistance at $122,400
-    → stop_loss: $121,930, take_profit: $122,400 (Risk $70, Gain $400 = 5.7:1 ratio ✓)
+  * Look through the 60-minute data for the strongest swing LOW or support pivot
+  * This could be: a level tested 2+ times, a sharp bounce point, consolidation zone
+  * Place stop 5-20 dollars BELOW this pivot
+  * stop_loss MUST BE BELOW entry_price
 
 For SELL (SHORT):
-  * stop_loss = above nearest STRONG resistance zone - MUST BE ABOVE ENTRY
-  * take_profit = at/near next STRONG support zone - MUST BE BELOW ENTRY
-  * Rule: take_profit < entry_price < stop_loss
-  * Example: Entry $122,000, Strong resistance at $122,050, Strong support at $121,600
-    → stop_loss: $122,070, take_profit: $121,600 (Risk $70, Gain $400 = 5.7:1 ratio ✓)
+  * Look through the 60-minute data for the strongest swing HIGH or resistance pivot
+  * This could be: a level tested 2+ times, a sharp rejection point, consolidation zone
+  * Place stop 5-20 dollars ABOVE this pivot
+  * stop_loss MUST BE ABOVE entry_price
 
-RISK-REWARD CHECK (Do this calculation!):
-- Calculate: (take_profit - entry_price) / (entry_price - stop_loss) for LONG
-- Calculate: (entry_price - take_profit) / (stop_loss - entry_price) for SHORT
-- If ratio < 2.0 → Reconsider trade or use "hold"
-- If no clear strong zones or bad ratio → use "hold"
+Step 3: CALCULATE THE TARGET (Based on stop distance)
+  * Calculate risk = |entry_price - stop_loss|
+  * Target distance should be 2x to 3x the risk
+  * For LONG: take_profit = entry_price + (2 to 3 × risk)
+  * For SHORT: take_profit = entry_price - (2 to 3 × risk)
+  * Choose the multiplier (2x or 3x) based on where the next significant level is
+
+Example for LONG:
+  * Entry: $122,000, Strong pivot low: $121,900
+  * Stop: $121,880 (20 below pivot)
+  * Risk: $122,000 - $121,880 = $120
+  * Target range: $122,240 to $122,360 (2x to 3x risk)
+  * Choose $122,360 if there's resistance there (3:1 ratio)
+
+Example for SHORT:
+  * Entry: $122,000, Strong pivot high: $122,100
+  * Stop: $122,120 (20 above pivot)
+  * Risk: $122,120 - $122,000 = $120
+  * Target range: $121,760 to $121,640 (2x to 3x risk)
+  * Choose $121,640 if there's support there (3:1 ratio)
+
+FINAL VALIDATION:
+- BUY: stop_loss < entry_price < take_profit ✓
+- SELL: take_profit < entry_price < stop_loss ✓
+- Ratio must be between 2:1 and 3:1 ✓
+- If stop placement is unclear or ratio doesn't work → use "hold"
 
 For "hold": set stop_loss and take_profit to null
 
@@ -560,8 +587,9 @@ Confidence levels:
 DOUBLE-CHECK before responding:
 - BUY: Is stop < entry < target? ✓
 - SELL: Is target < entry < stop? ✓
-- Is risk-reward ratio ≥ 2:1? ✓
-- Are stop/target at STRONG tested levels (not arbitrary)? ✓"""
+- Is stop placed at a STRONG pivot from the data? ✓
+- Is risk-reward ratio between 2:1 and 3:1? ✓
+- Did I calculate target as (2x to 3x) the risk distance? ✓"""
 
     response = client.chat.completions.create(
         model="gpt-4o-mini",
