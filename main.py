@@ -56,32 +56,62 @@ def save_positions(positions_data):
         json.dump(positions_data, f, indent=2)
 
 
-def check_stop_target(positions_data, current_price):
-    """Check if stop-loss or take-profit has been hit
+def check_stop_target(positions_data, csv_data):
+    """Check if stop-loss or take-profit has been hit by analyzing candle highs/lows
 
     Returns:
-        tuple: (should_close, reason) - reason is 'stop_hit', 'target_hit', or None
+        tuple: (should_close, reason, exit_price) - reason is 'stop_hit', 'target_hit', or None
     """
     pos = positions_data["current_position"]
 
     if pos["status"] == "none":
-        return False, None
+        return False, None, None
 
-    # For LONG positions
+    # Parse CSV data to get candles
+    lines = csv_data.strip().split('\n')[1:]  # Skip header
+    candles = []
+    for line in lines:
+        parts = line.split(',')
+        candles.append({
+            'timestamp': int(parts[0]),
+            'high': float(parts[2]),
+            'low': float(parts[3])
+        })
+
+    # Filter candles after entry_time
+    from dateutil import parser
+    entry_timestamp = int(parser.parse(pos["entry_time"]).timestamp())
+    relevant_candles = [c for c in candles if c['timestamp'] >= entry_timestamp]
+
+    # For LONG positions: check highs for take-profit, lows for stop-loss
     if pos["status"] == "long":
-        if pos["stop_loss"] and current_price <= pos["stop_loss"]:
-            return True, "stop_hit"
-        if pos["take_profit"] and current_price >= pos["take_profit"]:
-            return True, "target_hit"
+        # Check take-profit first (more favorable if both hit)
+        if pos["take_profit"]:
+            for candle in relevant_candles:
+                if candle['high'] >= pos["take_profit"]:
+                    return True, "target_hit", pos["take_profit"]
 
-    # For SHORT positions
+        # Check stop-loss
+        if pos["stop_loss"]:
+            for candle in relevant_candles:
+                if candle['low'] <= pos["stop_loss"]:
+                    return True, "stop_hit", pos["stop_loss"]
+
+    # For SHORT positions: check lows for take-profit, highs for stop-loss
     elif pos["status"] == "short":
-        if pos["stop_loss"] and current_price >= pos["stop_loss"]:
-            return True, "stop_hit"
-        if pos["take_profit"] and current_price <= pos["take_profit"]:
-            return True, "target_hit"
+        # Check take-profit first (more favorable if both hit)
+        if pos["take_profit"]:
+            for candle in relevant_candles:
+                if candle['low'] <= pos["take_profit"]:
+                    return True, "target_hit", pos["take_profit"]
 
-    return False, None
+        # Check stop-loss
+        if pos["stop_loss"]:
+            for candle in relevant_candles:
+                if candle['high'] >= pos["stop_loss"]:
+                    return True, "stop_hit", pos["stop_loss"]
+
+    return False, None, None
 
 
 def execute_paper_trade(action, price, positions_data, stop_loss=None, take_profit=None):
@@ -197,7 +227,7 @@ def execute_paper_trade(action, price, positions_data, stop_loss=None, take_prof
     return result
 
 
-def manage_positions(positions_data, trade_data, current_price):
+def manage_positions(positions_data, trade_data, current_price, csv_data):
     """Manage positions based on current state and new signal
 
     Returns:
@@ -207,16 +237,16 @@ def manage_positions(positions_data, trade_data, current_price):
     current_status = positions_data["current_position"]["status"]
     new_signal = trade_data.get("action", "hold") if trade_data else "hold"
 
-    # Check if stop-loss or take-profit hit first
-    should_close, reason = check_stop_target(positions_data, current_price)
+    # Check if stop-loss or take-profit hit first (checks candle highs/lows)
+    should_close, reason, exit_price = check_stop_target(positions_data, csv_data)
     if should_close:
         if current_status == "long":
-            result = execute_paper_trade("close_long", current_price, positions_data)
+            result = execute_paper_trade("close_long", exit_price, positions_data)
             result["message"] += f" ({reason.replace('_', ' ').title()})"
             results.append(result)
             current_status = "none"  # Update for next logic
         elif current_status == "short":
-            result = execute_paper_trade("close_short", current_price, positions_data)
+            result = execute_paper_trade("close_short", exit_price, positions_data)
             result["message"] += f" ({reason.replace('_', ' ').title()})"
             results.append(result)
             current_status = "none"
@@ -642,7 +672,7 @@ if __name__ == "__main__":
 
     # Manage positions (execute trades, check stops, etc.)
     print("💼 Managing positions...")
-    trade_results = manage_positions(positions_data, trade_data, current_price)
+    trade_results = manage_positions(positions_data, trade_data, current_price, data)
 
     # Print trade results
     if trade_results:
