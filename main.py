@@ -476,20 +476,45 @@ def analyze_with_llm(csv_data):
     latest_candle = lines[-1].split(',')
     current_price = float(latest_candle[4])  # Close price
 
-    prompt = f"""You are a crypto TA expert specializing in SHORT-TERM scalping. Analyze this BTC/USD 1m OHLCV data from the last 60 minutes:
+    prompt = f"""You are a crypto TA expert specializing in SHORT-TERM scalping with STRONG technical levels. Analyze this BTC/USD 1m OHLCV data from the last 60 minutes:
 {csv_data}
 
 Current BTC price: ${current_price:,.2f}
 
-IMPORTANT: This is 1-minute chart data for SCALPING, not swing trading. Stop-loss and take-profit MUST be based on actual support/resistance levels visible in the data above, NOT percentage-based calculations.
+🎯 ANALYSIS FRAMEWORK - Look for these patterns:
+
+1. **SIGNIFICANT SUPPORT/RESISTANCE ZONES**: Identify the STRONGEST, most noticeable price levels where:
+   - Price bounced multiple times (tested 2+ times)
+   - Price consolidated/ranged for several candles
+   - High volume occurred at that level
+   - These are your stop-loss and take-profit zones!
+
+2. **FALSE BREAKOUTS** (High priority signal):
+   - Did price recently break above a strong resistance or below a strong support?
+   - Did it then QUICKLY reverse back (within 3-5 candles)?
+   - If YES: This is a FALSE BREAKOUT → Trade the REVERSAL direction
+   - Example: Price breaks above $122,500 resistance, then drops back below → SELL signal
+
+3. **WAVE TRADING / TREND FOLLOWING** (Preferred for trending markets):
+   - Is the market moving in clear waves (higher highs + higher lows = uptrend, or lower lows + lower highs = downtrend)?
+   - In an UPTREND: Wait for pullbacks to ~50% of the previous swing up, then BUY
+   - In a DOWNTREND: Wait for bounces to ~50% of the previous swing down, then SELL
+   - Example: Price goes from $122,000 → $122,400 (+$400), pulls back to $122,200 (50% retrace) → BUY signal
+
+4. **RISK-REWARD RATIO** (CRITICAL - Must follow):
+   - Minimum 2:1 reward-to-risk ratio (risk $100 to make $200+)
+   - Prefer 3:1 or 4:1 when strong zones exist
+   - NEVER trade if ratio is poor (like risking $400 to make $100) → use "hold" instead
+   - It's OK to risk $100 with tight stop if target is $300-400 at a strong zone
+
+---
 
 Provide TWO outputs:
 
 1. ANALYSIS (for traders):
-Identify the highest high and lowest low in the data above. Identify key support/resistance levels, patterns, momentum. Give a clear recommendation (BUY/SELL/HOLD) with reasoning. Be concise.
+Identify strongest support/resistance zones, check for false breakouts, analyze trend/wave structure. Give clear BUY/SELL/HOLD recommendation with reasoning. Mention which pattern you're seeing (false breakout, wave trading, range, etc.).
 
 2. TRADE_DATA (for execution):
-Provide a JSON object with this EXACT structure:
 {{
   "action": "buy" or "sell" or "hold",
   "entry_price": {current_price},
@@ -498,46 +523,45 @@ Provide a JSON object with this EXACT structure:
   "confidence": 0-100
 }}
 
-⚠️ CRITICAL: Output PURE JSON ONLY. NO COMMENTS. Do NOT add // text after values. Comments break the parser.
+⚠️ CRITICAL: Output PURE JSON ONLY. NO COMMENTS. Do NOT add // text after values.
 
-Example of CORRECT format:
-{{
-  "action": "buy",
-  "entry_price": 122500,
-  "stop_loss": 122400,
-  "take_profit": 122600,
-  "confidence": 75
-}}
+RULES for stop_loss and take_profit:
+- MUST use STRONG support/resistance zones from the data (tested multiple times or high consolidation)
+- Stop-loss = just beyond the nearest strong zone (tight but safe)
+- Take-profit = next major support/resistance zone (with good risk-reward ratio)
 
-Example of WRONG format (DO NOT DO THIS):
-{{
-  "action": "buy",
-  "stop_loss": 122400, // Below recent low  ← NEVER ADD COMMENTS LIKE THIS
-  "take_profit": 122600 // Above resistance  ← THIS BREAKS THE SYSTEM
-}}
-
-CRITICAL RULES for stop_loss and take_profit:
-- MUST use actual price levels from the data above
-- For BUY (LONG):
-  * stop_loss = recent low from the data (or slightly below it) - MUST BE BELOW ENTRY
-  * take_profit = recent high from the data (or slightly above it) - MUST BE ABOVE ENTRY
+For BUY (LONG):
+  * stop_loss = below nearest STRONG support zone - MUST BE BELOW ENTRY
+  * take_profit = at/near next STRONG resistance zone - MUST BE ABOVE ENTRY
   * Rule: stop_loss < entry_price < take_profit
-- For SELL (SHORT):
-  * stop_loss = recent high from the data (or slightly above it) - MUST BE ABOVE ENTRY
-  * take_profit = recent low from the data (or slightly below it) - MUST BE BELOW ENTRY
-  * Rule: take_profit < entry_price < stop_loss
-- If action is "hold", set stop_loss and take_profit to null
-- Stop-loss should be 20-100 dollars away from entry (not thousands!)
-- Take-profit should be 50-200 dollars away from entry (realistic for 60min scalping)
-- Confidence: higher = stronger signal (>70 = strong, 50-70 = moderate, <50 = weak)
+  * Example: Entry $122,000, Strong support at $121,950, Strong resistance at $122,400
+    → stop_loss: $121,930, take_profit: $122,400 (Risk $70, Gain $400 = 5.7:1 ratio ✓)
 
-Example: If data shows high of 122150 and low of 121900, and current price is 122000:
-- BUY trade: entry=122000, stop_loss=121890 (BELOW entry), take_profit=122160 (ABOVE entry)
-- SELL trade: entry=122000, stop_loss=122160 (ABOVE entry), take_profit=121890 (BELOW entry)
+For SELL (SHORT):
+  * stop_loss = above nearest STRONG resistance zone - MUST BE ABOVE ENTRY
+  * take_profit = at/near next STRONG support zone - MUST BE BELOW ENTRY
+  * Rule: take_profit < entry_price < stop_loss
+  * Example: Entry $122,000, Strong resistance at $122,050, Strong support at $121,600
+    → stop_loss: $122,070, take_profit: $121,600 (Risk $70, Gain $400 = 5.7:1 ratio ✓)
+
+RISK-REWARD CHECK (Do this calculation!):
+- Calculate: (take_profit - entry_price) / (entry_price - stop_loss) for LONG
+- Calculate: (entry_price - take_profit) / (stop_loss - entry_price) for SHORT
+- If ratio < 2.0 → Reconsider trade or use "hold"
+- If no clear strong zones or bad ratio → use "hold"
+
+For "hold": set stop_loss and take_profit to null
+
+Confidence levels:
+- >70: Strong pattern (false breakout, clear wave entry, strong zones)
+- 50-70: Moderate setup
+- <50: Weak/unclear → probably use "hold"
 
 DOUBLE-CHECK before responding:
 - BUY: Is stop < entry < target? ✓
-- SELL: Is target < entry < stop? ✓"""
+- SELL: Is target < entry < stop? ✓
+- Is risk-reward ratio ≥ 2:1? ✓
+- Are stop/target at STRONG tested levels (not arbitrary)? ✓"""
 
     response = client.chat.completions.create(
         model="gpt-4o-mini",
