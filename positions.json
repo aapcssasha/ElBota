@@ -1,11 +1,11 @@
 {
   "current_position": {
     "status": "short",
-    "entry_price": 123896.99,
-    "entry_time": "2025-10-08T17:34:26.697340",
-    "stop_loss": 124006.29,
-    "take_profit": 123825.97,
-    "trade_id": "paper_1759944866",
+    "entry_price": 123758.3,
+    "entry_time": "2025-10-08T17:47:17.640229",
+    "stop_loss": 123886.7,
+    "take_profit": 123600,
+    "trade_id": "paper_1759945637",
     "action": "sell"
   },
   "last_signal": "sell",
@@ -337,10 +337,18 @@
       "profit_loss": -88.24000000000524,
       "entry_time": "2025-10-08T17:21:59.208266",
       "exit_time": "2025-10-08T17:34:26.697316"
+    },
+    {
+      "type": "short",
+      "entry_price": 123896.99,
+      "exit_price": 123825.97,
+      "profit_loss": 71.02000000000407,
+      "entry_time": "2025-10-08T17:34:26.697340",
+      "exit_time": "2025-10-08T17:47:17.640206"
     }
   ],
-  "paper_trading_balance": 10830.670000000013,
-  "total_trades": 41,
-  "winning_trades": 24,
+  "paper_trading_balance": 10901.690000000017,
+  "total_trades": 42,
+  "winning_trades": 25,
   "losing_trades": 17
 }
