@@ -666,6 +666,23 @@ def validate_trade_levels(trade_data, current_price):
     if stop is None or target is None:
         return False, "Missing stop_loss or take_profit"
 
+    # Calculate distances
+    stop_distance = abs(entry - stop)
+    target_distance = abs(entry - target)
+
+    # Check stop distance constraints ($80 to $500)
+    if stop_distance < 80:
+        return False, f"Stop too tight: ${stop_distance:.2f} (minimum $80)"
+    if stop_distance > 500:
+        return False, f"Stop too wide: ${stop_distance:.2f} (maximum $500)"
+
+    # Check risk-reward ratio (2:1 to 3:1)
+    rr_ratio = target_distance / stop_distance if stop_distance > 0 else 0
+    if rr_ratio < 2.0:
+        return False, f"Risk-reward too low: {rr_ratio:.2f}:1 (minimum 2:1)"
+    if rr_ratio > 3.0:
+        return False, f"Risk-reward too high: {rr_ratio:.2f}:1 (maximum 3:1)"
+
     # For BUY (long): stop < entry < target
     if action == 'buy':
         if stop >= entry:
@@ -695,14 +712,26 @@ def send_to_discord(analysis, webhook_url, chart_image, trade_data=None, trade_r
         for result in trade_results:
             full_description += f"\n{result['message']}"
 
-    # Add trade levels if there's a signal
-    if trade_data and trade_data.get('action') != 'hold':
+    # Add trade levels ONLY if trade was accepted (check if there's an active position or if signal matches)
+    # Don't show levels if validation rejected the trade
+    trade_was_accepted = False
+    if positions_data:
+        current_status = positions_data.get('current_position', {}).get('status', 'none')
+        last_signal = positions_data.get('last_signal', 'hold')
+        # Trade accepted if: there's an active position OR last_signal matches trade action
+        if current_status != 'none' or (trade_data and last_signal == trade_data.get('action')):
+            trade_was_accepted = True
+
+    if trade_data and trade_data.get('action') != 'hold' and trade_was_accepted:
         full_description += f"\n\n**📊 Trade Levels:**"
         full_description += f"\n🔵 Entry: ${trade_data.get('entry_price', 0):,.2f}"
         full_description += f"\n🔴 Stop Loss: ${trade_data.get('stop_loss', 0):,.2f}"
         full_description += f"\n🟢 Take Profit: ${trade_data.get('take_profit', 0):,.2f}"
         if 'confidence' in trade_data:
             full_description += f"\n📈 Confidence: {trade_data['confidence']}%"
+    elif trade_data and trade_data.get('action') != 'hold' and not trade_was_accepted:
+        # Trade was rejected by validation
+        full_description += f"\n\n**⚠️ Trade Rejected:** Signal was {trade_data.get('action', 'unknown').upper()} but validation failed (check stop distance, risk-reward ratio, or levels)"
 
     # Add performance stats
     if positions_data:
