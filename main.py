@@ -502,6 +502,24 @@ Provide a JSON object with this EXACT structure:
   "confidence": 0-100
 }}
 
+⚠️ CRITICAL: Output PURE JSON ONLY. NO COMMENTS. Do NOT add // text after values. Comments break the parser.
+
+Example of CORRECT format:
+{{
+  "action": "buy",
+  "entry_price": 122500,
+  "stop_loss": 122400,
+  "take_profit": 122600,
+  "confidence": 75
+}}
+
+Example of WRONG format (DO NOT DO THIS):
+{{
+  "action": "buy",
+  "stop_loss": 122400, // Below recent low  ← NEVER ADD COMMENTS LIKE THIS
+  "take_profit": 122600 // Above resistance  ← THIS BREAKS THE SYSTEM
+}}
+
 CRITICAL RULES for stop_loss and take_profit:
 - MUST use actual price levels from the data above
 - For BUY (LONG):
