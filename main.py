@@ -83,33 +83,29 @@ def check_stop_target(positions_data, csv_data):
     entry_timestamp = int(parser.parse(pos["entry_time"]).timestamp())
     relevant_candles = [c for c in candles if c['timestamp'] >= entry_timestamp]
 
-    # For LONG positions: check highs for take-profit, lows for stop-loss
+    # For LONG positions: check each candle chronologically
     if pos["status"] == "long":
-        # Check take-profit first (more favorable if both hit)
-        if pos["take_profit"]:
-            for candle in relevant_candles:
-                if candle['high'] >= pos["take_profit"]:
-                    return True, "target_hit", pos["take_profit"]
+        for candle in relevant_candles:
+            # Check BOTH stop and target in the same candle (chronological order)
+            # If target hit in this candle, return it
+            if pos["take_profit"] and candle['high'] >= pos["take_profit"]:
+                return True, "target_hit", pos["take_profit"]
 
-        # Check stop-loss
-        if pos["stop_loss"]:
-            for candle in relevant_candles:
-                if candle['low'] <= pos["stop_loss"]:
-                    return True, "stop_hit", pos["stop_loss"]
+            # If stop hit in this candle, return it
+            if pos["stop_loss"] and candle['low'] <= pos["stop_loss"]:
+                return True, "stop_hit", pos["stop_loss"]
 
-    # For SHORT positions: check lows for take-profit, highs for stop-loss
+    # For SHORT positions: check each candle chronologically
     elif pos["status"] == "short":
-        # Check take-profit first (more favorable if both hit)
-        if pos["take_profit"]:
-            for candle in relevant_candles:
-                if candle['low'] <= pos["take_profit"]:
-                    return True, "target_hit", pos["take_profit"]
+        for candle in relevant_candles:
+            # Check BOTH stop and target in the same candle (chronological order)
+            # If target hit in this candle, return it
+            if pos["take_profit"] and candle['low'] <= pos["take_profit"]:
+                return True, "target_hit", pos["take_profit"]
 
-        # Check stop-loss
-        if pos["stop_loss"]:
-            for candle in relevant_candles:
-                if candle['high'] >= pos["stop_loss"]:
-                    return True, "stop_hit", pos["stop_loss"]
+            # If stop hit in this candle, return it
+            if pos["stop_loss"] and candle['high'] >= pos["stop_loss"]:
+                return True, "stop_hit", pos["stop_loss"]
 
     return False, None, None
 
