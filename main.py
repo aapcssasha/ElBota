@@ -336,10 +336,10 @@ def fetch_btc_data():
     """Fetch BTC/USD 1-minute candles from Coinbase Exchange API"""
     import time
 
-    # Request last 31 minutes of data (to ensure we get 30 complete candles)
+    # Request last 61 minutes of data (to ensure we get 60 complete candles)
     # Coinbase API: end time is exclusive, so we need current time
     end_time = int(time.time())
-    start_time = end_time - (31 * 60)  # 31 minutes ago
+    start_time = end_time - (61 * 60)  # 61 minutes ago
 
     url = f"https://api.exchange.coinbase.com/products/BTC-USD/candles?granularity=60&start={start_time}&end={end_time}"
     response = requests.get(url)
@@ -349,8 +349,8 @@ def fetch_btc_data():
     # Format: [timestamp, low, high, open, close, volume]
     data.reverse()
 
-    # Take last 30 candles (most recent), convert to CSV
-    recent = data[-30:] if len(data) >= 30 else data
+    # Take last 60 candles (most recent), convert to CSV
+    recent = data[-60:] if len(data) >= 60 else data
     output = StringIO()
     writer = csv.writer(output)
     writer.writerow(["Timestamp", "Open", "High", "Low", "Close", "Volume"])
@@ -453,7 +453,7 @@ def generate_chart(data, trade_data=None):
         'type': 'candle',
         'style': style,
         'volume': True,
-        'title': 'BTC/USD 1min Chart (Last 30 min)',
+        'title': 'BTC/USD 1min Chart (Last 60 min)',
         'savefig': dict(fname=buf, dpi=150, bbox_inches='tight')
     }
 
@@ -480,7 +480,7 @@ def analyze_with_llm(csv_data):
     latest_candle = lines[-1].split(',')
     current_price = float(latest_candle[4])  # Close price
 
-    prompt = f"""You are a crypto TA expert specializing in SHORT-TERM scalping. Analyze this BTC/USD 1m OHLCV data from the last 30 minutes:
+    prompt = f"""You are a crypto TA expert specializing in SHORT-TERM scalping. Analyze this BTC/USD 1m OHLCV data from the last 60 minutes:
 {csv_data}
 
 Current BTC price: ${current_price:,.2f}
@@ -514,7 +514,7 @@ CRITICAL RULES for stop_loss and take_profit:
   * Rule: take_profit < entry_price < stop_loss
 - If action is "hold", set stop_loss and take_profit to null
 - Stop-loss should be 20-100 dollars away from entry (not thousands!)
-- Take-profit should be 50-200 dollars away from entry (realistic for 30min scalping)
+- Take-profit should be 50-200 dollars away from entry (realistic for 60min scalping)
 - Confidence: higher = stronger signal (>70 = strong, 50-70 = moderate, <50 = weak)
 
 Example: If data shows high of 122150 and low of 121900, and current price is 122000:
