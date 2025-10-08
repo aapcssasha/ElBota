@@ -255,11 +255,19 @@ git push
    - Uptrend: Buy on pullbacks
    - Downtrend: Sell on bounces
 
-4. **Risk-Reward Enforcement**
-   - Minimum 2:1 ratio (risk $100 to make $200+)
-   - Prefer 3:1 or 4:1 when strong zones exist
-   - Rejects trades with poor ratios (e.g., risk $400 to make $100)
-   - ChatGPT calculates ratio before recommending trade
+4. **Stop-Loss Placement** (Primary step)
+   - After determining direction, find the STRONGEST pivot first
+   - For LONG: Most significant swing low or support (tested 2+ times)
+   - For SHORT: Most significant swing high or resistance (tested 2+ times)
+   - Place stop 5-20 dollars beyond this pivot
+   - Stop must be at a real pivot, not arbitrary
+
+5. **Target Calculation** (Based on stop distance)
+   - Calculate risk distance: |entry - stop|
+   - Target = 2x to 3x the risk distance
+   - Ratio range: 2:1 to 3:1 reward-to-risk
+   - Choose multiplier based on next significant level
+   - If no good target exists → use "hold"
 
 ### Trade Level Validation
 
