@@ -502,11 +502,18 @@ Current BTC price: ${current_price:,.2f}
    - Example: Price goes from $122,000 → $122,400 (+$400), pulls back to $122,200 (50% retrace) → BUY signal
 
 4. **STOP-LOSS PLACEMENT** (CRITICAL - Do this FIRST):
-   - After determining direction (BUY/SELL), find the STRONGEST pivot point from the data
-   - For LONG: Find the most significant swing LOW or support zone (tested 2+ times or strong bounce)
-   - For SHORT: Find the most significant swing HIGH or resistance zone (tested 2+ times or strong rejection)
+   - After determining direction (BUY/SELL), find the STRONGEST pivot point from the FULL 60-minute data
+   - Look through ALL 60 candles, not just the last 5-10 candles
+   - For LONG: Find the most significant swing LOW or support zone (tested 2+ times, clear structure, meaningful level)
+   - For SHORT: Find the most significant swing HIGH or resistance zone (tested 2+ times, clear structure, meaningful level)
    - Place stop just beyond this pivot (5-20 dollars past it)
-   - The stop MUST be at a real pivot, not an arbitrary price
+   - The stop MUST be at a real structural pivot, not just a random recent candle high/low
+
+   **STOP DISTANCE CONSTRAINTS (CRITICAL):**
+   - Minimum stop distance: $80 (|entry - stop| ≥ $80)
+   - Maximum stop distance: $500 (|entry - stop| ≤ $500)
+   - If the nearest strong pivot is closer than $80, look for the next major pivot
+   - If all pivots are more than $500 away → use "hold"
 
 5. **TARGET CALCULATION** (Based on stop distance):
    - Calculate risk distance: |entry - stop|
@@ -539,16 +546,20 @@ Step 1: Determine trade direction (BUY/SELL/HOLD) based on patterns above
 
 Step 2: FIND THE STOP-LOSS (Most important step!)
 For BUY (LONG):
-  * Look through the 60-minute data for the strongest swing LOW or support pivot
+  * Look through ALL 60 minutes of data for the strongest swing LOW or support pivot
   * This could be: a level tested 2+ times, a sharp bounce point, consolidation zone
+  * DO NOT just use the low of the last few candles - find SIGNIFICANT pivots
   * Place stop 5-20 dollars BELOW this pivot
   * stop_loss MUST BE BELOW entry_price
+  * CHECK: Is |entry - stop| between $80 and $500? If not, find different pivot
 
 For SELL (SHORT):
-  * Look through the 60-minute data for the strongest swing HIGH or resistance pivot
+  * Look through ALL 60 minutes of data for the strongest swing HIGH or resistance pivot
   * This could be: a level tested 2+ times, a sharp rejection point, consolidation zone
+  * DO NOT just use the high of the last few candles - find SIGNIFICANT pivots
   * Place stop 5-20 dollars ABOVE this pivot
   * stop_loss MUST BE ABOVE entry_price
+  * CHECK: Is |entry - stop| between $80 and $500? If not, find different pivot
 
 Step 3: CALCULATE THE TARGET (Based on stop distance)
   * Calculate risk = |entry_price - stop_loss|
@@ -558,24 +569,34 @@ Step 3: CALCULATE THE TARGET (Based on stop distance)
   * Choose the multiplier (2x or 3x) based on where the next significant level is
 
 Example for LONG:
-  * Entry: $122,000, Strong pivot low: $121,900
-  * Stop: $121,880 (20 below pivot)
-  * Risk: $122,000 - $121,880 = $120
-  * Target range: $122,240 to $122,360 (2x to 3x risk)
-  * Choose $122,360 if there's resistance there (3:1 ratio)
+  * Entry: $122,000
+  * Looking at 60min data, find strong pivot low at $121,850 (tested 3 times)
+  * Stop: $121,830 (20 below pivot)
+  * Risk: $122,000 - $121,830 = $170 ✓ (between $80-$500)
+  * Target range: $122,340 to $122,510 (2x to 3x risk)
+  * Choose $122,510 if there's resistance there (3:1 ratio)
 
 Example for SHORT:
-  * Entry: $122,000, Strong pivot high: $122,100
-  * Stop: $122,120 (20 above pivot)
-  * Risk: $122,120 - $122,000 = $120
-  * Target range: $121,760 to $121,640 (2x to 3x risk)
-  * Choose $121,640 if there's support there (3:1 ratio)
+  * Entry: $122,000
+  * Looking at 60min data, find strong pivot high at $122,200 (tested 2 times, rejection)
+  * Stop: $122,220 (20 above pivot)
+  * Risk: $122,220 - $122,000 = $220 ✓ (between $80-$500)
+  * Target range: $121,560 to $121,340 (2x to 3x risk)
+  * Choose $121,340 if there's support there (3:1 ratio)
 
-FINAL VALIDATION:
+Example of REJECTED trade (stop too tight):
+  * Entry: $122,000, nearest pivot: $121,970
+  * Stop would be: $121,950
+  * Risk: $50 ✗ (less than $80 minimum)
+  * Result: Find a different pivot OR use "hold"
+
+FINAL VALIDATION (Check ALL of these):
 - BUY: stop_loss < entry_price < take_profit ✓
 - SELL: take_profit < entry_price < stop_loss ✓
-- Ratio must be between 2:1 and 3:1 ✓
-- If stop placement is unclear or ratio doesn't work → use "hold"
+- Stop distance: $80 ≤ |entry - stop| ≤ $500 ✓
+- Risk-reward ratio: between 2:1 and 3:1 ✓
+- Stop is at a SIGNIFICANT pivot from the full 60min data (not a random recent candle) ✓
+- If ANY check fails → use "hold"
 
 For "hold": set stop_loss and take_profit to null
 
@@ -587,7 +608,8 @@ Confidence levels:
 DOUBLE-CHECK before responding:
 - BUY: Is stop < entry < target? ✓
 - SELL: Is target < entry < stop? ✓
-- Is stop placed at a STRONG pivot from the data? ✓
+- Is stop placed at a SIGNIFICANT pivot from the FULL 60min data (not just last few candles)? ✓
+- Is stop distance between $80 and $500? ✓
 - Is risk-reward ratio between 2:1 and 3:1? ✓
 - Did I calculate target as (2x to 3x) the risk distance? ✓"""
 
