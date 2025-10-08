@@ -515,12 +515,16 @@ Current BTC price: ${current_price:,.2f}
    - If the nearest strong pivot is closer than $80, look for the next major pivot
    - If all pivots are more than $500 away → use "hold"
 
-5. **TARGET CALCULATION** (Based on stop distance):
+5. **TARGET CALCULATION** (Based on market structure and stop distance):
    - Calculate risk distance: |entry - stop|
-   - Target distance MUST be 2x to 3x the risk distance
-   - Minimum ratio: 1:2 (risk $100, make $200) = 2:1 reward-to-risk
-   - Maximum ratio: 1:3 (risk $100, make $300) = 3:1 reward-to-risk
-   - If no good target exists within this ratio → use "hold"
+   - Find the next significant support/resistance level for your target
+   - Target distance should naturally fall within 2x to 3x the risk distance
+   - **Ratio boundaries (NOT strict targets):**
+     - Minimum: 1:2 (risk $100, make $200) = 2:1 reward-to-risk
+     - Maximum: 1:3 (risk $100, make $300) = 3:1 reward-to-risk
+   - Use the actual market level, don't force exactly 2:1 or 3:1
+   - Example: If risk is $100 and next strong level is $230 away → use $230 (2.3:1 ratio ✓)
+   - If no significant level exists within this range → use "hold"
 
 ---
 
@@ -561,28 +565,32 @@ For SELL (SHORT):
   * stop_loss MUST BE ABOVE entry_price
   * CHECK: Is |entry - stop| between $80 and $500? If not, find different pivot
 
-Step 3: CALCULATE THE TARGET (Based on stop distance)
+Step 3: CALCULATE THE TARGET (Based on market structure, not fixed multiplier)
   * Calculate risk = |entry_price - stop_loss|
-  * Target distance should be 2x to 3x the risk
-  * For LONG: take_profit = entry_price + (2 to 3 × risk)
-  * For SHORT: take_profit = entry_price - (2 to 3 × risk)
-  * Choose the multiplier (2x or 3x) based on where the next significant level is
+  * Look for the next significant support/resistance level
+  * Check if this level falls within acceptable range (2x to 3x the risk)
+  * For LONG: Find resistance level between entry + (2×risk) and entry + (3×risk)
+  * For SHORT: Find support level between entry - (2×risk) and entry - (3×risk)
+  * Use the actual market level, don't calculate artificial targets
+  * Any ratio between 2:1 and 3:1 is acceptable (2.1:1, 2.5:1, 2.8:1, etc.)
 
 Example for LONG:
   * Entry: $122,000
   * Looking at 60min data, find strong pivot low at $121,850 (tested 3 times)
   * Stop: $121,830 (20 below pivot)
   * Risk: $122,000 - $121,830 = $170 ✓ (between $80-$500)
-  * Target range: $122,340 to $122,510 (2x to 3x risk)
-  * Choose $122,510 if there's resistance there (3:1 ratio)
+  * Acceptable target range: $122,340 to $122,510
+  * Looking at resistance levels: Strong resistance at $122,420 (tested 2x)
+  * Target: $122,420 (2.47:1 ratio ✓) - Use the actual level, not forced 2:1 or 3:1
 
 Example for SHORT:
   * Entry: $122,000
   * Looking at 60min data, find strong pivot high at $122,200 (tested 2 times, rejection)
   * Stop: $122,220 (20 above pivot)
   * Risk: $122,220 - $122,000 = $220 ✓ (between $80-$500)
-  * Target range: $121,560 to $121,340 (2x to 3x risk)
-  * Choose $121,340 if there's support there (3:1 ratio)
+  * Acceptable target range: $121,560 to $121,340
+  * Looking at support levels: Strong support at $121,500 (consolidation zone)
+  * Target: $121,500 (2.27:1 ratio ✓) - Use the actual level, not forced 2:1 or 3:1
 
 Example of REJECTED trade (stop too tight):
   * Entry: $122,000, nearest pivot: $121,970
@@ -594,8 +602,9 @@ FINAL VALIDATION (Check ALL of these):
 - BUY: stop_loss < entry_price < take_profit ✓
 - SELL: take_profit < entry_price < stop_loss ✓
 - Stop distance: $80 ≤ |entry - stop| ≤ $500 ✓
-- Risk-reward ratio: between 2:1 and 3:1 ✓
+- Risk-reward ratio: 2.0 ≤ ratio ≤ 3.0 (NOT exactly 2 or 3, any value in range is fine) ✓
 - Stop is at a SIGNIFICANT pivot from the full 60min data (not a random recent candle) ✓
+- Target is at a real support/resistance level (not calculated artificially) ✓
 - If ANY check fails → use "hold"
 
 For "hold": set stop_loss and take_profit to null
@@ -610,8 +619,9 @@ DOUBLE-CHECK before responding:
 - SELL: Is target < entry < stop? ✓
 - Is stop placed at a SIGNIFICANT pivot from the FULL 60min data (not just last few candles)? ✓
 - Is stop distance between $80 and $500? ✓
-- Is risk-reward ratio between 2:1 and 3:1? ✓
-- Did I calculate target as (2x to 3x) the risk distance? ✓"""
+- Is risk-reward ratio between 2:1 and 3:1 (any value in this range, not forced to exact 2 or 3)? ✓
+- Did I place target at an actual support/resistance level (not artificially calculated)? ✓
+- Does the target naturally fall within 2x to 3x the risk distance? ✓"""
 
     response = client.chat.completions.create(
         model="gpt-4o-mini",
