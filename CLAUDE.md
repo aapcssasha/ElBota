@@ -231,12 +231,35 @@ git push
 
 - **Model:** gpt-4o-mini (cheap, fast)
 - **Context:** 60 minutes of 1-min candles (OHLCV data)
-- **Focus:** SHORT-TERM SCALPING (not swing trading)
+- **Focus:** SHORT-TERM SCALPING with strong technical levels
 - **Output:** Dual format
   1. Human-readable analysis (for Discord)
   2. Structured JSON (action, entry, stop, target, confidence)
 
-**Key instruction:** Stop/target must be based on actual support/resistance levels from the data (not percentage-based).
+**Trading Framework:**
+
+1. **Strong Support/Resistance Zones**
+   - Levels tested 2+ times
+   - Price consolidation areas
+   - High volume zones
+   - These become stop-loss and take-profit targets
+
+2. **False Breakout Detection** (High priority)
+   - Price breaks strong level then quickly reverses (3-5 candles)
+   - Trade the reversal direction
+   - Example: Break above resistance → drops back → SELL signal
+
+3. **Wave Trading / Trend Following** (Preferred for trends)
+   - Identify market waves (higher highs/lows or lower highs/lows)
+   - Enter on 50% retracements of previous swing
+   - Uptrend: Buy on pullbacks
+   - Downtrend: Sell on bounces
+
+4. **Risk-Reward Enforcement**
+   - Minimum 2:1 ratio (risk $100 to make $200+)
+   - Prefer 3:1 or 4:1 when strong zones exist
+   - Rejects trades with poor ratios (e.g., risk $400 to make $100)
+   - ChatGPT calculates ratio before recommending trade
 
 ### Trade Level Validation
 
