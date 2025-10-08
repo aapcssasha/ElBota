@@ -256,11 +256,16 @@ git push
    - Downtrend: Sell on bounces
 
 4. **Stop-Loss Placement** (Primary step)
-   - After determining direction, find the STRONGEST pivot first
-   - For LONG: Most significant swing low or support (tested 2+ times)
-   - For SHORT: Most significant swing high or resistance (tested 2+ times)
+   - After determining direction, find the STRONGEST pivot from FULL 60-minute data
+   - Look through ALL 60 candles, not just last 5-10 candles
+   - For LONG: Most significant swing low or support (tested 2+ times, clear structure)
+   - For SHORT: Most significant swing high or resistance (tested 2+ times, clear structure)
    - Place stop 5-20 dollars beyond this pivot
-   - Stop must be at a real pivot, not arbitrary
+   - **Stop Distance Constraints:**
+     - Minimum: $80 (prevents overly tight stops)
+     - Maximum: $500 (keeps stops reasonable)
+     - If nearest pivot is <$80 away, find next major pivot
+     - If all pivots >$500 away, use "hold"
 
 5. **Target Calculation** (Based on stop distance)
    - Calculate risk distance: |entry - stop|
