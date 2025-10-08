@@ -304,24 +304,36 @@ Before executing any trade, the bot validates ALL of these criteria:
 If ANY validation fails:
 - Trade is rejected and not executed
 - Error message appears in Discord
-- Discord shows "⚠️ Trade Rejected" instead of invalid levels
+- Discord shows "⚠️ Trade Rejected" warning
+- **Chart displays "INVALID TRADE" text** (red box at top-right)
 - Bot prevents bad trades even if ChatGPT generates them
+- **If in opposite position:** Closes existing position but doesn't open new invalid trade
+  - Example: SHORT position → invalid BUY signal → Closes SHORT, ends with no position
 
 ### Position Management Logic
 
-State machine prevents duplicates:
+State machine prevents duplicates and handles direction changes:
 
-| Current Status | New Signal | Action |
-|----------------|------------|--------|
-| None | BUY | Open Long |
-| None | SELL | Open Short |
-| None | HOLD | Do nothing |
-| Long | BUY | Hold (already in) |
-| Long | SELL | Close Long → Open Short |
-| Long | HOLD | Close Long |
-| Short | SELL | Hold (already in) |
-| Short | BUY | Close Short → Open Long |
-| Short | HOLD | Close Short |
+| Current Status | New Signal | Validation | Action |
+|----------------|------------|------------|--------|
+| None | BUY | Valid | Open Long |
+| None | BUY | Invalid | Do nothing (show error) |
+| None | SELL | Valid | Open Short |
+| None | SELL | Invalid | Do nothing (show error) |
+| None | HOLD | N/A | Do nothing |
+| Long | BUY | N/A | Hold (already in) |
+| Long | SELL | Valid | Close Long → Open Short |
+| Long | SELL | Invalid | Close Long → No position |
+| Long | HOLD | N/A | Close Long |
+| Short | SELL | N/A | Hold (already in) |
+| Short | BUY | Valid | Close Short → Open Long |
+| Short | BUY | Invalid | Close Short → No position |
+| Short | HOLD | N/A | Close Short |
+
+**Key behavior:** When signal direction changes but validation fails:
+- Bot closes existing opposite position (respects direction change)
+- Bot doesn't open invalid new position (protects capital)
+- Result: Flat/no position until next valid signal
 
 ---
 
