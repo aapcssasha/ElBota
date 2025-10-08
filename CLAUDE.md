@@ -267,15 +267,17 @@ git push
      - If nearest pivot is <$80 away, find next major pivot
      - If all pivots >$500 away, use "hold"
 
-5. **Target Calculation** (Based on market structure)
-   - Calculate risk distance: |entry - stop|
-   - Find next significant support/resistance level
-   - Target should naturally fall within 2x to 3x the risk distance
-   - **Ratio boundaries:** 2:1 to 3:1 reward-to-risk (min to max)
-   - These are flexible boundaries, NOT strict targets
-   - Any ratio in range is acceptable (2.1:1, 2.5:1, 2.8:1, etc.)
-   - Use actual market levels, don't force artificial targets
-   - If no significant level exists within range → use "hold"
+5. **Target Calculation** (Market structure FIRST, ratio check SECOND)
+   - **PRIORITY:** Find best target based on market structure
+   - Look for next significant support/resistance level
+   - Use the actual market level as target
+   - **THEN verify ratio falls within boundaries:**
+     - Minimum: 0.5:1 (risk $400 to make $200) - aka 1:2 ratio
+     - Maximum: 3:1 (risk $200 to make $600)
+   - Any ratio between 0.5:1 and 3:1 is acceptable
+   - Examples: 0.65:1, 1.2:1, 2.5:1, 2.8:1, etc.
+   - These are just boundaries to prevent extreme trades
+   - If no significant level exists within ratio range → use "hold"
 
 ### Trade Level Validation
 
@@ -291,11 +293,13 @@ Before executing any trade, the bot validates ALL of these criteria:
    - Example rejection: Stop $2 away → "Stop too tight: $2.13 (minimum $80)"
 
 3. **Risk-Reward Ratio:**
-   - Minimum: 2:1 (risk $100 to make $200)
-   - Maximum: 3:1 (risk $100 to make $300)
-   - Any ratio in range is valid: 2.1:1, 2.5:1, 2.8:1, etc.
-   - These are boundaries, not strict targets
-   - Example rejection: 1.5:1 ratio → "Risk-reward too low: 1.50:1 (minimum 2:1)"
+   - Minimum: 0.5:1 (risk $400 to make $200) - aka 1:2 ratio
+   - Maximum: 3:1 (risk $200 to make $600)
+   - Any ratio in range is valid: 0.65:1, 1.2:1, 2.5:1, etc.
+   - These are boundaries to prevent extreme trades, NOT targets
+   - Very flexible range allows natural market-based targets
+   - Example rejection: 0.3:1 ratio → "Risk-reward too low: 0.30:1 (minimum 0.5:1)"
+   - Example rejection: 4.5:1 ratio → "Risk-reward too high: 4.50:1 (maximum 3:1)"
 
 If ANY validation fails:
 - Trade is rejected and not executed
