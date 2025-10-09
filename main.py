@@ -16,6 +16,17 @@ load_dotenv()
 
 
 # ============================================================================
+# CONFIGURATION - Change these to switch crypto/timeframe
+# ============================================================================
+CRYPTO_SYMBOL = "BTC"  # Options: BTC, ETH, SOL, etc.
+TIMEFRAME_MINUTES = 120  # How many minutes of data to fetch
+
+# Derived values (don't change these)
+COINBASE_API_URL = f"https://api.exchange.coinbase.com/products/{CRYPTO_SYMBOL}-USD/candles"
+CRYPTO_LOWER = CRYPTO_SYMBOL.lower()
+
+
+# ============================================================================
 # POSITION MANAGEMENT FUNCTIONS
 # ============================================================================
 
@@ -329,15 +340,15 @@ def manage_positions(positions_data, trade_data, current_price, csv_data):
 
 
 def fetch_btc_data():
-    """Fetch BTC/USD 1-minute candles from Coinbase Exchange API"""
+    """Fetch crypto/USD 1-minute candles from Coinbase Exchange API"""
     import time
 
-    # Request last 61 minutes of data (to ensure we get 60 complete candles)
+    # Request last N+1 minutes of data (to ensure we get N complete candles)
     # Coinbase API: end time is exclusive, so we need current time
     end_time = int(time.time())
-    start_time = end_time - (61 * 60)  # 61 minutes ago
+    start_time = end_time - ((TIMEFRAME_MINUTES + 1) * 60)  # N+1 minutes ago
 
-    url = f"https://api.exchange.coinbase.com/products/BTC-USD/candles?granularity=60&start={start_time}&end={end_time}"
+    url = f"{COINBASE_API_URL}?granularity=60&start={start_time}&end={end_time}"
     response = requests.get(url)
     data = response.json()  # Returns array of candles
 
@@ -345,8 +356,8 @@ def fetch_btc_data():
     # Format: [timestamp, low, high, open, close, volume]
     data.reverse()
 
-    # Take last 60 candles (most recent), convert to CSV
-    recent = data[-60:] if len(data) >= 60 else data
+    # Take last N candles (most recent), convert to CSV
+    recent = data[-TIMEFRAME_MINUTES:] if len(data) >= TIMEFRAME_MINUTES else data
     output = StringIO()
     writer = csv.writer(output)
     writer.writerow(["Timestamp", "Open", "High", "Low", "Close", "Volume"])
@@ -450,7 +461,7 @@ def generate_chart(data, trade_data=None, trade_invalid=False):
         'type': 'candle',
         'style': style,
         'volume': True,
-        'title': 'BTC/USD 1min Chart (Last 60 min)',
+        'title': f'{CRYPTO_SYMBOL}/USD - Last {TIMEFRAME_MINUTES} Minutes (1-min candles)',
         'returnfig': True  # Return figure object so we can add text
     }
 
@@ -494,10 +505,10 @@ def analyze_with_llm(csv_data):
     latest_candle = lines[-1].split(',')
     current_price = float(latest_candle[4])  # Close price
 
-    prompt = f"""You are a crypto TA expert specializing in SHORT-TERM scalping with STRONG technical levels. Analyze this BTC/USD 1m OHLCV data from the last 60 minutes:
+    prompt = f"""You are a crypto TA expert specializing in SHORT-TERM scalping with STRONG technical levels. Analyze this {CRYPTO_SYMBOL}/USD 1m OHLCV data from the last {TIMEFRAME_MINUTES} minutes:
 {csv_data}
 
-Current BTC price: ${current_price:,.2f}
+Current {CRYPTO_SYMBOL} price: ${current_price:,.2f}
 
 🎯 ANALYSIS FRAMEWORK - Strategy Priority:
 
@@ -531,8 +542,8 @@ Current BTC price: ${current_price:,.2f}
    - Use when no clear trend or pullback setup exists
 
 4. **STOP-LOSS PLACEMENT** (CRITICAL - Do this FIRST):
-   - After determining direction (BUY/SELL), find the STRONGEST pivot point from the FULL 60-minute data
-   - Look through ALL 60 candles, not just the last 5-10 candles
+   - After determining direction (BUY/SELL), find the STRONGEST pivot point from the FULL {TIMEFRAME_MINUTES}-minute data
+   - Look through ALL {TIMEFRAME_MINUTES} candles, not just the last 5-10 candles
    - For LONG: Find the most significant swing LOW or support zone (tested 2+ times, clear structure, meaningful level)
    - For SHORT: Find the most significant swing HIGH or resistance zone (tested 2+ times, clear structure, meaningful level)
    - Place stop just beyond this pivot (5-20 dollars past it)
@@ -584,7 +595,7 @@ Step 1: Determine trade direction (BUY/SELL/HOLD) based on patterns above
 
 Step 2: FIND THE STOP-LOSS (Most important step!)
 For BUY (LONG):
-  * Look through ALL 60 minutes of data for the strongest swing LOW or support pivot
+  * Look through ALL {TIMEFRAME_MINUTES} minutes of data for the strongest swing LOW or support pivot
   * This could be: a level tested 2+ times, a sharp bounce point, consolidation zone
   * DO NOT just use the low of the last few candles - find SIGNIFICANT pivots
   * Place stop 5-20 dollars BELOW this pivot
@@ -592,7 +603,7 @@ For BUY (LONG):
   * CHECK: Is |entry - stop| / entry between 0.10% and 0.50%? If not, find different pivot
 
 For SELL (SHORT):
-  * Look through ALL 60 minutes of data for the strongest swing HIGH or resistance pivot
+  * Look through ALL {TIMEFRAME_MINUTES} minutes of data for the strongest swing HIGH or resistance pivot
   * This could be: a level tested 2+ times, a sharp rejection point, consolidation zone
   * DO NOT just use the high of the last few candles - find SIGNIFICANT pivots
   * Place stop 5-20 dollars ABOVE this pivot
@@ -613,7 +624,7 @@ Step 3: CALCULATE THE TARGET (Market structure is PRIORITY, ratio is just a chec
 
 Example for LONG (good ratio):
   * Entry: $4,300
-  * Looking at 60min data, find strong pivot low at $4,288 (tested 3 times)
+  * Looking at {TIMEFRAME_MINUTES}min data, find strong pivot low at $4,288 (tested 3 times)
   * Stop: $4,285 (below pivot)
   * Risk: $4,300 - $4,285 = $15 → 0.35% ✓ (between 0.10%-0.50%)
   * Looking for resistance: Strong resistance at $4,315 (consolidation zone)
@@ -621,7 +632,7 @@ Example for LONG (good ratio):
 
 Example for SHORT (acceptable ratio):
   * Entry: $4,300
-  * Looking at 60min data, find strong pivot high at $4,312 (tested 3 times)
+  * Looking at {TIMEFRAME_MINUTES}min data, find strong pivot high at $4,312 (tested 3 times)
   * Stop: $4,315 (above pivot)
   * Risk: $4,315 - $4,300 = $15 → 0.35% ✓ (between 0.10%-0.50%)
   * Looking for support: Strong support at $4,280 (tested 2x as support)
@@ -646,7 +657,7 @@ FINAL VALIDATION (Check ALL of these):
 - SELL: take_profit < entry_price < stop_loss ✓
 - Stop distance: 0.10% ≤ |entry - stop| / entry ≤ 0.50% ✓
 - Risk-reward ratio: 0.5 ≤ ratio ≤ 3.0 (any value in range is acceptable) ✓
-- Stop is at a SIGNIFICANT pivot from the full 60min data (not a random recent candle) ✓
+- Stop is at a SIGNIFICANT pivot from the full {TIMEFRAME_MINUTES}min data (not a random recent candle) ✓
 - Target is at a real support/resistance level (not calculated artificially) ✓
 - If ANY check fails → use "hold"
 
@@ -667,7 +678,7 @@ Confidence levels:
 DOUBLE-CHECK before responding:
 - BUY: Is stop < entry < target? ✓
 - SELL: Is target < entry < stop? ✓
-- Is stop placed at a SIGNIFICANT pivot from the FULL 60min data (not just last few candles)? ✓
+- Is stop placed at a SIGNIFICANT pivot from the FULL {TIMEFRAME_MINUTES}min data (not just last few candles)? ✓
 - Is stop distance between 0.10% and 0.50% from entry? ✓
 - Did I place target at an actual support/resistance level (not artificially calculated)? ✓
 - Is risk-reward ratio between 0.5:1 and 3:1? ✓
@@ -831,7 +842,7 @@ def send_to_discord(analysis, webhook_url, chart_image, trade_data=None, trade_r
     payload = {
         "embeds": [
             {
-                "title": "🪙 BTC Trading Bot Update",
+                "title": f"🪙 {CRYPTO_SYMBOL} Trading Bot Update",
                 "description": full_description,
                 "color": 0x00FF00
                 if "buy" in analysis.lower()
@@ -866,7 +877,7 @@ def send_to_discord(analysis, webhook_url, chart_image, trade_data=None, trade_r
 
 if __name__ == "__main__":
     print("="*70)
-    print("🤖 BTC TRADING BOT - PAPER TRADING MODE")
+    print(f"🤖 {CRYPTO_SYMBOL} TRADING BOT - PAPER TRADING MODE")
     print("="*70)
 
     # Load current position state
@@ -901,7 +912,7 @@ if __name__ == "__main__":
         print(f"   🎯 Win Rate: {win_rate:.1f}%")
 
     # Fetch the data
-    print("\n📥 Fetching BTC data from Coinbase...")
+    print(f"\n📥 Fetching {CRYPTO_SYMBOL} data from Coinbase...")
     data = fetch_btc_data()
     print("✅ Data fetched successfully\n")
 
@@ -909,7 +920,7 @@ if __name__ == "__main__":
     lines = data.strip().split('\n')
     latest_candle = lines[-1].split(',')
     current_price = float(latest_candle[4])
-    print(f"💵 Current BTC Price: ${current_price:,.2f}\n")
+    print(f"💵 Current {CRYPTO_SYMBOL} Price: ${current_price:,.2f}\n")
 
     # Analyze with LLM (now returns analysis + trade data)
     print("🧠 Analyzing with ChatGPT...")

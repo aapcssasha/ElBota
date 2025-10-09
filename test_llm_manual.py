@@ -23,15 +23,22 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import mplfinance as mpf
 
-# Configuration
-COINBASE_API_URL = "https://api.exchange.coinbase.com/products/eth-USD/candles"
+# ============================================================================
+# CONFIGURATION - Change these to switch crypto/timeframe
+# ============================================================================
+CRYPTO_SYMBOL = "ETH"  # Options: BTC, ETH, SOL, etc.
+TIMEFRAME_MINUTES = 120  # How many minutes of data to fetch
 OUTPUT_PROMPT_FILE = "prompt_for_llms.txt"
 OUTPUT_CHART_FILE = "chart_for_llms.png"
 
+# Derived values (don't change)
+COINBASE_API_URL = f"https://api.exchange.coinbase.com/products/{CRYPTO_SYMBOL}-USD/candles"
+CRYPTO_LOWER = CRYPTO_SYMBOL.lower()
 
-def fetch_eth_data():
-    """Fetch last 60 minutes of eth/USD 1-minute candles from Coinbase"""
-    print("📊 Fetching eth data from Coinbase...")
+
+def fetch_crypto_data():
+    """Fetch last N minutes of crypto/USD 1-minute candles from Coinbase"""
+    print(f"📊 Fetching {CRYPTO_SYMBOL} data from Coinbase...")
 
     params = {
         "granularity": 60  # 1-minute candles
@@ -51,20 +58,20 @@ def fetch_eth_data():
     df["timestamp"] = pd.to_datetime(df["timestamp"], unit="s", utc=True)
     df["timestamp"] = df["timestamp"].dt.tz_convert("America/New_York")
 
-    # Sort by time (oldest first) and limit to last 60 candles
-    df = df.sort_values("timestamp").tail(60).reset_index(drop=True)
+    # Sort by time (oldest first) and limit to last N candles
+    df = df.sort_values("timestamp").tail(TIMEFRAME_MINUTES).reset_index(drop=True)
 
     print(f"✅ Fetched {len(df)} candles")
     print(
         f"📅 Time range: {df['timestamp'].iloc[0]} to {df['timestamp'].iloc[-1]} (ET)"
     )
-    print(f"💰 Current eth price: ${df['close'].iloc[-1]:,.2f}")
+    print(f"💰 Current {CRYPTO_SYMBOL} price: ${df['close'].iloc[-1]:,.2f}")
 
     return df
 
 
 def format_data_for_prompt(df):
-    """Format the eth data as it would be sent to the LLM"""
+    """Format the crypto data as it would be sent to the LLM"""
     data_str = "Timestamp (ET), Open, High, Low, Close, Volume\n"
 
     for _, row in df.iterrows():
@@ -77,11 +84,11 @@ def format_data_for_prompt(df):
 def generate_prompt(data_str, current_price):
     """Generate the exact prompt that goes to ChatGPT API"""
 
-    prompt = f"""You are a professional eth short-term scalping trading analyst. Analyze the following 60 minutes of eth/USD 1-minute candle data and provide a trading recommendation.
+    prompt = f"""You are a professional {CRYPTO_SYMBOL} short-term scalping trading analyst. Analyze the following {TIMEFRAME_MINUTES} minutes of {CRYPTO_SYMBOL}/USD 1-minute candle data and provide a trading recommendation.
 
-**CURRENT eth PRICE: ${current_price:,.2f}**
+**CURRENT {CRYPTO_SYMBOL} PRICE: ${current_price:,.2f}**
 
-**DATA (Last 60 candles):**
+**DATA (Last {TIMEFRAME_MINUTES} candles):**
 {data_str}
 
 ---
@@ -122,10 +129,10 @@ def generate_prompt(data_str, current_price):
 **CRITICAL:** Stop-loss determines if trade is valid!
 
 **Process:**
-1. Analyze FULL 60-minute data for strongest pivot points
+1. Analyze FULL {TIMEFRAME_MINUTES}-minute data for strongest pivot points
 2. Look for most significant swing high/low (tested 2+ times, clear structure)
 3. For LONG: Find most significant swing LOW or support zone
-4. For SHORT: Find most significant swing HIGH or resistance zone
+4. FOR SHORT: Find most significant swing HIGH or resistance zone
 5. Place stop 5-20 dollars beyond this pivot
 
 **Stop Distance Constraints:**
@@ -246,7 +253,7 @@ def generate_chart(df):
         type="candle",
         style=s,
         volume=True,
-        title="eth/USD - Last 60 Minutes (1-min candles)",
+        title=f"{CRYPTO_SYMBOL}/USD - Last {TIMEFRAME_MINUTES} Minutes (1-min candles)",
         ylabel="Price (USD)",
         ylabel_lower="Volume",
         figsize=(14, 8),
@@ -264,11 +271,11 @@ def generate_chart(df):
 
 def main():
     print("\n" + "=" * 60)
-    print("🧪 MANUAL LLM TESTING - PROMPT GENERATOR")
+    print(f"🧪 MANUAL LLM TESTING - {CRYPTO_SYMBOL} PROMPT GENERATOR")
     print("=" * 60 + "\n")
 
     # Fetch data
-    df = fetch_eth_data()
+    df = fetch_crypto_data()
     current_price = df["close"].iloc[-1]
 
     # Format data
