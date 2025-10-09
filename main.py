@@ -499,25 +499,36 @@ def analyze_with_llm(csv_data):
 
 Current BTC price: ${current_price:,.2f}
 
-🎯 ANALYSIS FRAMEWORK - Look for these patterns:
+🎯 ANALYSIS FRAMEWORK - Strategy Priority:
 
-1. **SIGNIFICANT SUPPORT/RESISTANCE ZONES**: Identify the STRONGEST, most noticeable price levels where:
-   - Price bounced multiple times (tested 2+ times)
-   - Price consolidated/ranged for several candles
-   - High volume occurred at that level
-   - These are your stop-loss and take-profit zones!
+1. **TREND FOLLOWING WITH PULLBACK ENTRIES** (PRIMARY STRATEGY):
+   - Identify clear trend: higher highs/lows (uptrend) OR lower highs/lows (downtrend)
+   - Enter on pullbacks/bounces: 20-80% retracement of previous swing (flexible range)
 
-2. **FALSE BREAKOUTS** (High priority signal):
-   - Did price recently break above a strong resistance or below a strong support?
-   - Did it then QUICKLY reverse back (within 3-5 candles)?
-   - If YES: This is a FALSE BREAKOUT → Trade the REVERSAL direction
-   - Example: Price breaks above $122,500 resistance, then drops back below → SELL signal
+   **IDEAL SETUP (highest confidence):**
+   - **For UPTREND (BUY):** Price makes higher high → pulls back to/near previous high
+     * Example: $50 → drops to $25 → rallies to new high $75 → pulls back to ~$50 (near previous high)
+     * This combines: trend following + ~50% pullback + previous structure support
+   - **For DOWNTREND (SELL):** Price makes lower low → bounces to/near previous low
+     * Example: $50 → rallies to $75 → drops to new low $25 → bounces to ~$50 (near previous low)
+     * This combines: trend following + ~50% bounce + previous structure resistance
 
-3. **WAVE TRADING / TREND FOLLOWING** (Preferred for trending markets):
-   - Is the market moving in clear waves (higher highs + higher lows = uptrend, or lower lows + lower highs = downtrend)?
-   - In an UPTREND: Wait for pullbacks to ~50% of the previous swing up, then BUY
-   - In a DOWNTREND: Wait for bounces to ~50% of the previous swing down, then SELL
-   - Example: Price goes from $122,000 → $122,400 (+$400), pulls back to $122,200 (50% retrace) → BUY signal
+   **ACCEPTABLE SETUPS (medium confidence):**
+   - Any 20-80% retracement in a clear trend, even if not at previous structure
+   - Closer to 40-60% range = higher confidence
+   - Landing at previous high/low = bonus confidence boost
+
+2. **FALSE BREAKOUT REVERSAL** (SECONDARY - use if detected):
+   - Price breaks strong support/resistance → quickly reverses within 3-5 candles
+   - Trade the reversal direction
+   - Example: Break above resistance → drops back → SELL signal
+   - Example: Break below support → bounces back → BUY signal
+
+3. **SIGNIFICANT SUPPORT/RESISTANCE ZONES** (FALLBACK):
+   - Levels tested 2+ times with price consolidation
+   - High volume zones
+   - Clear pivot points
+   - Use when no clear trend or pullback setup exists
 
 4. **STOP-LOSS PLACEMENT** (CRITICAL - Do this FIRST):
    - After determining direction (BUY/SELL), find the STRONGEST pivot point from the FULL 60-minute data
@@ -553,7 +564,7 @@ Current BTC price: ${current_price:,.2f}
 Provide TWO outputs:
 
 1. ANALYSIS (for traders):
-Identify strongest support/resistance zones, check for false breakouts, analyze trend/wave structure. Give clear BUY/SELL/HOLD recommendation with reasoning. IMPORTANT: Mention which pivot point you're using for the stop-loss and why it's significant (e.g., "Stop below $121,880 pivot - tested 3 times as support").
+Analyze trend and pullback structure (PRIMARY), check for false breakouts (SECONDARY), identify support/resistance zones. Give clear BUY/SELL/HOLD recommendation with reasoning. IMPORTANT: Mention which pivot point you're using for the stop-loss and why it's significant (e.g., "Stop below $121,880 pivot - tested 3 times as support").
 
 2. TRADE_DATA (for execution):
 {{
@@ -647,8 +658,8 @@ Priority is finding real market levels, THEN checking ratio is in range.
 For "hold": set stop_loss and take_profit to null
 
 Confidence levels:
-- >70: Strong pattern (false breakout, clear wave entry, strong zones)
-- 50-70: Moderate setup
+- >70: Strong pattern (ideal trend pullback at structure, false breakout, strong zones)
+- 50-70: Moderate setup (acceptable trend pullback, decent structure)
 - <50: Weak/unclear → probably use "hold"
 
 DOUBLE-CHECK before responding:
