@@ -1,12 +1,12 @@
 {
   "current_position": {
-    "status": "none",
-    "entry_price": null,
-    "entry_time": null,
-    "stop_loss": null,
-    "take_profit": null,
-    "trade_id": null,
-    "action": null
+    "status": "short",
+    "entry_price": 122013.35,
+    "entry_time": "2025-10-09T03:31:08.520848",
+    "stop_loss": 122094,
+    "take_profit": 121800,
+    "trade_id": "paper_1759980668",
+    "action": "sell"
   },
   "last_signal": "sell",
   "trade_history": [
