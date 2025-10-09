@@ -8,7 +8,7 @@
     "trade_id": null,
     "action": null
   },
-  "last_signal": "sell",
+  "last_signal": "hold",
   "trade_history": [
     {
       "type": "long",
