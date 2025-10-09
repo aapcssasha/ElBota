@@ -539,10 +539,11 @@ Current BTC price: ${current_price:,.2f}
    - The stop MUST be at a real structural pivot, not just a random recent candle high/low
 
    **STOP DISTANCE CONSTRAINTS (CRITICAL):**
-   - Minimum stop distance: $80 (|entry - stop| ≥ $80)
-   - Maximum stop distance: $500 (|entry - stop| ≤ $500)
-   - If the nearest strong pivot is closer than $80, look for the next major pivot
-   - If all pivots are more than $500 away → use "hold"
+   - Minimum stop distance: 0.10% from entry (|entry - stop| / entry ≥ 0.001)
+   - Maximum stop distance: 0.50% from entry (|entry - stop| / entry ≤ 0.005)
+   - Calculate: (|entry - stop| / entry) × 100 = percentage
+   - If the nearest strong pivot is closer than 0.10%, look for the next major pivot
+   - If all pivots are more than 0.50% away → use "hold"
 
 5. **TARGET CALCULATION** (Based on market structure FIRST, ratio check SECOND):
    - **PRIORITY: Find the best target based on market structure**
@@ -588,7 +589,7 @@ For BUY (LONG):
   * DO NOT just use the low of the last few candles - find SIGNIFICANT pivots
   * Place stop 5-20 dollars BELOW this pivot
   * stop_loss MUST BE BELOW entry_price
-  * CHECK: Is |entry - stop| between $80 and $500? If not, find different pivot
+  * CHECK: Is |entry - stop| / entry between 0.10% and 0.50%? If not, find different pivot
 
 For SELL (SHORT):
   * Look through ALL 60 minutes of data for the strongest swing HIGH or resistance pivot
@@ -596,7 +597,7 @@ For SELL (SHORT):
   * DO NOT just use the high of the last few candles - find SIGNIFICANT pivots
   * Place stop 5-20 dollars ABOVE this pivot
   * stop_loss MUST BE ABOVE entry_price
-  * CHECK: Is |entry - stop| between $80 and $500? If not, find different pivot
+  * CHECK: Is |entry - stop| / entry between 0.10% and 0.50%? If not, find different pivot
 
 Step 3: CALCULATE THE TARGET (Market structure is PRIORITY, ratio is just a check)
   * Calculate risk = |entry_price - stop_loss|
@@ -611,38 +612,39 @@ Step 3: CALCULATE THE TARGET (Market structure is PRIORITY, ratio is just a chec
   * If no significant level exists within this ratio range, use "hold"
 
 Example for LONG (good ratio):
-  * Entry: $122,000
-  * Looking at 60min data, find strong pivot low at $121,850 (tested 3 times)
-  * Stop: $121,830 (20 below pivot)
-  * Risk: $122,000 - $121,830 = $170 ✓ (between $80-$500)
-  * Looking for resistance: Strong resistance at $122,280 (consolidation zone)
-  * Target: $122,280 (distance: $280, ratio: 1.65:1 ✓) - Within 0.5:1 to 3:1 range
+  * Entry: $4,300
+  * Looking at 60min data, find strong pivot low at $4,288 (tested 3 times)
+  * Stop: $4,285 (below pivot)
+  * Risk: $4,300 - $4,285 = $15 → 0.35% ✓ (between 0.10%-0.50%)
+  * Looking for resistance: Strong resistance at $4,315 (consolidation zone)
+  * Target: $4,315 (distance: $15 → 0.35%, ratio: 1:1 ✓) - Within 0.5:1 to 3:1 range
 
-Example for SHORT (acceptable but negative ratio):
-  * Entry: $122,000
-  * Looking at 60min data, find strong pivot high at $122,150 (tested 3 times)
-  * Stop: $122,170 (20 above pivot)
-  * Risk: $122,170 - $122,000 = $170 ✓ (between $80-$500)
-  * Looking for support: Strong support at $121,890 (tested 2x as support)
-  * Target: $121,890 (distance: $110, ratio: 0.65:1 ✓) - Within range, not ideal but acceptable
+Example for SHORT (acceptable ratio):
+  * Entry: $4,300
+  * Looking at 60min data, find strong pivot high at $4,312 (tested 3 times)
+  * Stop: $4,315 (above pivot)
+  * Risk: $4,315 - $4,300 = $15 → 0.35% ✓ (between 0.10%-0.50%)
+  * Looking for support: Strong support at $4,280 (tested 2x as support)
+  * Target: $4,280 (distance: $20 → 0.47%, ratio: 1.33:1 ✓) - Within range
 
 Example for LONG (great ratio):
-  * Entry: $122,000
-  * Strong pivot low at $121,800 → Stop: $121,780
-  * Risk: $220
-  * Next resistance at $122,600 (major level)
-  * Target: $122,600 (distance: $600, ratio: 2.73:1 ✓) - Excellent ratio
+  * Entry: $4,300
+  * Strong pivot low at $4,280 → Stop: $4,278
+  * Risk: $22 → 0.51% ✗ (exceeds 0.50% max)
+  * Result: Try next pivot at $4,288 → Stop: $4,285 → 0.35% ✓
+  * Next resistance at $4,320 (major level)
+  * Target: $4,320 (distance: $20 → 0.47%, ratio: 1.33:1 ✓)
 
 Example of REJECTED trade (stop too tight):
-  * Entry: $122,000, nearest pivot: $121,970
-  * Stop would be: $121,950
-  * Risk: $50 ✗ (less than $80 minimum)
+  * Entry: $4,300, nearest pivot: $4,298
+  * Stop would be: $4,297
+  * Risk: $3 → 0.07% ✗ (less than 0.10% minimum)
   * Result: Find a different pivot OR use "hold"
 
 FINAL VALIDATION (Check ALL of these):
 - BUY: stop_loss < entry_price < take_profit ✓
 - SELL: take_profit < entry_price < stop_loss ✓
-- Stop distance: $80 ≤ |entry - stop| ≤ $500 ✓
+- Stop distance: 0.10% ≤ |entry - stop| / entry ≤ 0.50% ✓
 - Risk-reward ratio: 0.5 ≤ ratio ≤ 3.0 (any value in range is acceptable) ✓
 - Stop is at a SIGNIFICANT pivot from the full 60min data (not a random recent candle) ✓
 - Target is at a real support/resistance level (not calculated artificially) ✓
@@ -666,7 +668,7 @@ DOUBLE-CHECK before responding:
 - BUY: Is stop < entry < target? ✓
 - SELL: Is target < entry < stop? ✓
 - Is stop placed at a SIGNIFICANT pivot from the FULL 60min data (not just last few candles)? ✓
-- Is stop distance between $80 and $500? ✓
+- Is stop distance between 0.10% and 0.50% from entry? ✓
 - Did I place target at an actual support/resistance level (not artificially calculated)? ✓
 - Is risk-reward ratio between 0.5:1 and 3:1? ✓
 - Did I prioritize market structure FIRST, then check ratio SECOND? ✓"""
@@ -724,15 +726,23 @@ def validate_trade_levels(trade_data, current_price):
     if stop is None or target is None:
         return False, "Missing stop_loss or take_profit"
 
-    # Calculate distances
+    # Calculate distances and percentages
     stop_distance = abs(entry - stop)
     target_distance = abs(entry - target)
+    stop_percentage = (stop_distance / entry) * 100  # Convert to percentage
+    target_percentage = (target_distance / entry) * 100
 
-    # Check stop distance constraints ($80 to $500)
-    if stop_distance < 80:
-        return False, f"Stop too tight: ${stop_distance:.2f} (minimum $80)"
-    if stop_distance > 500:
-        return False, f"Stop too wide: ${stop_distance:.2f} (maximum $500)"
+    # Check stop distance constraints (0.10% to 0.50%)
+    if stop_percentage < 0.10:
+        return False, f"Stop too tight: {stop_percentage:.2f}% (minimum 0.10%)"
+    if stop_percentage > 0.50:
+        return False, f"Stop too wide: {stop_percentage:.2f}% (maximum 0.50%)"
+
+    # Check target distance constraints (0.10% to 0.50%)
+    if target_percentage < 0.10:
+        return False, f"Target too close: {target_percentage:.2f}% (minimum 0.10%)"
+    if target_percentage > 0.50:
+        return False, f"Target too far: {target_percentage:.2f}% (maximum 0.50%)"
 
     # Check risk-reward ratio (0.5:1 to 3:1, meaning 1:2 to 3:1)
     rr_ratio = target_distance / stop_distance if stop_distance > 0 else 0

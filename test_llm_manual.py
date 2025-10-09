@@ -24,16 +24,17 @@ import matplotlib.pyplot as plt
 import mplfinance as mpf
 
 # Configuration
-COINBASE_API_URL = "https://api.exchange.coinbase.com/products/BTC-USD/candles"
+COINBASE_API_URL = "https://api.exchange.coinbase.com/products/eth-USD/candles"
 OUTPUT_PROMPT_FILE = "prompt_for_llms.txt"
 OUTPUT_CHART_FILE = "chart_for_llms.png"
 
-def fetch_btc_data():
-    """Fetch last 60 minutes of BTC/USD 1-minute candles from Coinbase"""
-    print("📊 Fetching BTC data from Coinbase...")
+
+def fetch_eth_data():
+    """Fetch last 60 minutes of eth/USD 1-minute candles from Coinbase"""
+    print("📊 Fetching eth data from Coinbase...")
 
     params = {
-        'granularity': 60  # 1-minute candles
+        "granularity": 60  # 1-minute candles
     }
 
     response = requests.get(COINBASE_API_URL, params=params)
@@ -42,37 +43,43 @@ def fetch_btc_data():
     data = response.json()
 
     # Coinbase returns: [timestamp, low, high, open, close, volume]
-    df = pd.DataFrame(data, columns=['timestamp', 'low', 'high', 'open', 'close', 'volume'])
+    df = pd.DataFrame(
+        data, columns=["timestamp", "low", "high", "open", "close", "volume"]
+    )
 
     # Convert timestamp to datetime (ET timezone for display)
-    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s', utc=True)
-    df['timestamp'] = df['timestamp'].dt.tz_convert('America/New_York')
+    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="s", utc=True)
+    df["timestamp"] = df["timestamp"].dt.tz_convert("America/New_York")
 
     # Sort by time (oldest first) and limit to last 60 candles
-    df = df.sort_values('timestamp').tail(60).reset_index(drop=True)
+    df = df.sort_values("timestamp").tail(60).reset_index(drop=True)
 
     print(f"✅ Fetched {len(df)} candles")
-    print(f"📅 Time range: {df['timestamp'].iloc[0]} to {df['timestamp'].iloc[-1]} (ET)")
-    print(f"💰 Current BTC price: ${df['close'].iloc[-1]:,.2f}")
+    print(
+        f"📅 Time range: {df['timestamp'].iloc[0]} to {df['timestamp'].iloc[-1]} (ET)"
+    )
+    print(f"💰 Current eth price: ${df['close'].iloc[-1]:,.2f}")
 
     return df
 
+
 def format_data_for_prompt(df):
-    """Format the BTC data as it would be sent to the LLM"""
+    """Format the eth data as it would be sent to the LLM"""
     data_str = "Timestamp (ET), Open, High, Low, Close, Volume\n"
 
     for _, row in df.iterrows():
-        time_str = row['timestamp'].strftime('%Y-%m-%d %H:%M')
+        time_str = row["timestamp"].strftime("%Y-%m-%d %H:%M")
         data_str += f"{time_str}, {row['open']:.2f}, {row['high']:.2f}, {row['low']:.2f}, {row['close']:.2f}, {row['volume']:.6f}\n"
 
     return data_str
 
+
 def generate_prompt(data_str, current_price):
     """Generate the exact prompt that goes to ChatGPT API"""
 
-    prompt = f"""You are a professional BTC short-term scalping trading analyst. Analyze the following 60 minutes of BTC/USD 1-minute candle data and provide a trading recommendation.
+    prompt = f"""You are a professional eth short-term scalping trading analyst. Analyze the following 60 minutes of eth/USD 1-minute candle data and provide a trading recommendation.
 
-**CURRENT BTC PRICE: ${current_price:,.2f}**
+**CURRENT eth PRICE: ${current_price:,.2f}**
 
 **DATA (Last 60 candles):**
 {data_str}
@@ -122,15 +129,18 @@ def generate_prompt(data_str, current_price):
 5. Place stop 5-20 dollars beyond this pivot
 
 **Stop Distance Constraints:**
-- Minimum distance: $80 (prevents overly tight stops)
-- Maximum distance: $500 (keeps stops reasonable)
-- If nearest pivot is <$80 away → find next major pivot
-- If all pivots are >$500 away → use "hold" action
+- Minimum distance: 0.10% from entry (prevents overly tight stops)
+- Maximum distance: 0.50% from entry (keeps stops reasonable)
+- Calculate: (|entry - stop| / entry) × 100 = percentage
+- If nearest pivot is <0.10% away → find next major pivot
+- If all pivots are >0.50% away → use "hold" action
 
 **Example (LONG):**
-- Current: $122,000
-- Found strong support at $121,600 (tested 3x in last hour)
-- Stop placement: $121,550 (below support, $450 away) ✅ Valid ($80-$500 range)
+- Current: $4,300
+- Found strong support at $4,280 (tested 3x in last hour)
+- Stop placement: $4,275 (below support, $25 away = 0.58% from entry)
+- Wait, 0.58% > 0.50% max → Try next pivot at $4,290
+- New stop: $4,285 ($15 away = 0.35%) ✅ Valid (0.10%-0.50% range)
 
 ### 3. TARGET CALCULATION (MARKET STRUCTURE FIRST)
 
@@ -157,7 +167,8 @@ If no significant level exists within ratio range → use "hold"
 ### 4. VALIDATION CHECKS (Must pass ALL):
 
 - Direction: LONG (stop < entry < target) or SHORT (target < entry < stop)
-- Stop Distance: Between $80 and $500 from entry
+- Stop Distance: Between 0.10% and 0.50% from entry
+- Target Distance: Between 0.10% and 0.50% from entry
 - Risk-Reward: Between 0.5:1 and 3:1
 - If ANY check fails → use "hold" action
 
@@ -200,62 +211,65 @@ Now analyze the data and provide your recommendation."""
 
     return prompt
 
+
 def generate_chart(df):
     """Generate candlestick chart similar to main bot"""
     print("\n📈 Generating chart...")
 
     # Prepare data for mplfinance
-    chart_df = df.set_index('timestamp')
-    chart_df = chart_df[['open', 'high', 'low', 'close', 'volume']]
-    chart_df.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
+    chart_df = df.set_index("timestamp")
+    chart_df = chart_df[["open", "high", "low", "close", "volume"]]
+    chart_df.columns = ["Open", "High", "Low", "Close", "Volume"]
 
     # Create custom style
     mc = mpf.make_marketcolors(
-        up='#26a69a', down='#ef5350',
-        edge='inherit',
-        wick='inherit',
-        volume='in',
-        alpha=0.9
+        up="#26a69a",
+        down="#ef5350",
+        edge="inherit",
+        wick="inherit",
+        volume="in",
+        alpha=0.9,
     )
 
     s = mpf.make_mpf_style(
         marketcolors=mc,
-        gridstyle='-',
-        gridcolor='#e0e0e0',
-        facecolor='white',
-        figcolor='white',
-        gridaxis='both'
+        gridstyle="-",
+        gridcolor="#e0e0e0",
+        facecolor="white",
+        figcolor="white",
+        gridaxis="both",
     )
 
     # Plot
     fig, axes = mpf.plot(
         chart_df,
-        type='candle',
+        type="candle",
         style=s,
         volume=True,
-        title='BTC/USD - Last 60 Minutes (1-min candles)',
-        ylabel='Price (USD)',
-        ylabel_lower='Volume',
+        title="eth/USD - Last 60 Minutes (1-min candles)",
+        ylabel="Price (USD)",
+        ylabel_lower="Volume",
         figsize=(14, 8),
         returnfig=True,
-        datetime_format='%H:%M',
-        xrotation=45
+        datetime_format="%H:%M",
+        xrotation=45,
     )
 
     # Save
-    plt.savefig(OUTPUT_CHART_FILE, dpi=150, bbox_inches='tight')
+    plt.savefig(OUTPUT_CHART_FILE, dpi=150, bbox_inches="tight")
     plt.close()
 
     print(f"✅ Chart saved to: {OUTPUT_CHART_FILE}")
 
+
 def main():
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("🧪 MANUAL LLM TESTING - PROMPT GENERATOR")
-    print("="*60 + "\n")
+    print("=" * 60 + "\n")
 
     # Fetch data
-    df = fetch_btc_data()
-    current_price = df['close'].iloc[-1]
+    df = fetch_eth_data()
+    current_price = df["close"].iloc[-1]
 
     # Format data
     data_str = format_data_for_prompt(df)
@@ -264,7 +278,7 @@ def main():
     prompt = generate_prompt(data_str, current_price)
 
     # Save prompt to file
-    with open(OUTPUT_PROMPT_FILE, 'w') as f:
+    with open(OUTPUT_PROMPT_FILE, "w") as f:
         f.write(prompt)
 
     print(f"\n✅ Prompt saved to: {OUTPUT_PROMPT_FILE}")
@@ -273,9 +287,9 @@ def main():
     generate_chart(df)
 
     # Print instructions
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("📋 HOW TO TEST DIFFERENT LLMs")
-    print("="*60)
+    print("=" * 60)
     print(f"""
 1. Open the prompt file: {OUTPUT_PROMPT_FILE}
 2. Copy the entire prompt
@@ -303,13 +317,14 @@ def main():
 """)
 
     # Print prompt preview
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("📄 PROMPT PREVIEW (first 500 chars)")
-    print("="*60)
+    print("=" * 60)
     print(prompt[:500] + "...")
     print("\n[Full prompt saved to file]")
 
     print("\n✅ Done! Ready for manual testing.\n")
+
 
 if __name__ == "__main__":
     try:
