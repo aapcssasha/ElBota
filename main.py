@@ -18,17 +18,20 @@ load_dotenv()
 # ============================================================================
 # CONFIGURATION - Change these to switch crypto/timeframe
 # ============================================================================
-CRYPTO_SYMBOL = "BTC"  # Options: BTC, ETH, SOL, etc.
+CRYPTO_SYMBOL = "ETH"  # Options: BTC, ETH, SOL, etc.
 TIMEFRAME_MINUTES = 120  # How many minutes of data to fetch
 
 # Derived values (don't change these)
-COINBASE_API_URL = f"https://api.exchange.coinbase.com/products/{CRYPTO_SYMBOL}-USD/candles"
+COINBASE_API_URL = (
+    f"https://api.exchange.coinbase.com/products/{CRYPTO_SYMBOL}-USD/candles"
+)
 CRYPTO_LOWER = CRYPTO_SYMBOL.lower()
 
 
 # ============================================================================
 # POSITION MANAGEMENT FUNCTIONS
 # ============================================================================
+
 
 def load_positions():
     """Load current position state from positions.json"""
@@ -44,26 +47,26 @@ def load_positions():
                 "stop_loss": None,
                 "take_profit": None,
                 "trade_id": None,
-                "action": None
+                "action": None,
             },
             "last_signal": "hold",
             "trade_history": [],
             "paper_trading_balance": 10000.0,
             "total_trades": 0,
             "winning_trades": 0,
-            "losing_trades": 0
+            "losing_trades": 0,
         }
-        with open(positions_file, 'w') as f:
+        with open(positions_file, "w") as f:
             json.dump(default_state, f, indent=2)
         return default_state
 
-    with open(positions_file, 'r') as f:
+    with open(positions_file, "r") as f:
         return json.load(f)
 
 
 def save_positions(positions_data):
     """Save position state to positions.json"""
-    with open("positions.json", 'w') as f:
+    with open("positions.json", "w") as f:
         json.dump(positions_data, f, indent=2)
 
 
@@ -79,31 +82,34 @@ def check_stop_target(positions_data, csv_data):
         return False, None, None
 
     # Parse CSV data to get candles
-    lines = csv_data.strip().split('\n')[1:]  # Skip header
+    lines = csv_data.strip().split("\n")[1:]  # Skip header
     candles = []
     for line in lines:
-        parts = line.split(',')
-        candles.append({
-            'timestamp': int(parts[0]),
-            'high': float(parts[2]),
-            'low': float(parts[3])
-        })
+        parts = line.split(",")
+        candles.append(
+            {
+                "timestamp": int(parts[0]),
+                "high": float(parts[2]),
+                "low": float(parts[3]),
+            }
+        )
 
     # Filter candles after entry_time
     from dateutil import parser
+
     entry_timestamp = int(parser.parse(pos["entry_time"]).timestamp())
-    relevant_candles = [c for c in candles if c['timestamp'] >= entry_timestamp]
+    relevant_candles = [c for c in candles if c["timestamp"] >= entry_timestamp]
 
     # For LONG positions: check each candle chronologically
     if pos["status"] == "long":
         for candle in relevant_candles:
             # Check BOTH stop and target in the same candle (chronological order)
             # If target hit in this candle, return it
-            if pos["take_profit"] and candle['high'] >= pos["take_profit"]:
+            if pos["take_profit"] and candle["high"] >= pos["take_profit"]:
                 return True, "target_hit", pos["take_profit"]
 
             # If stop hit in this candle, return it
-            if pos["stop_loss"] and candle['low'] <= pos["stop_loss"]:
+            if pos["stop_loss"] and candle["low"] <= pos["stop_loss"]:
                 return True, "stop_hit", pos["stop_loss"]
 
     # For SHORT positions: check each candle chronologically
@@ -111,17 +117,19 @@ def check_stop_target(positions_data, csv_data):
         for candle in relevant_candles:
             # Check BOTH stop and target in the same candle (chronological order)
             # If target hit in this candle, return it
-            if pos["take_profit"] and candle['low'] <= pos["take_profit"]:
+            if pos["take_profit"] and candle["low"] <= pos["take_profit"]:
                 return True, "target_hit", pos["take_profit"]
 
             # If stop hit in this candle, return it
-            if pos["stop_loss"] and candle['high'] >= pos["stop_loss"]:
+            if pos["stop_loss"] and candle["high"] >= pos["stop_loss"]:
                 return True, "stop_hit", pos["stop_loss"]
 
     return False, None, None
 
 
-def execute_paper_trade(action, price, positions_data, stop_loss=None, take_profit=None):
+def execute_paper_trade(
+    action, price, positions_data, stop_loss=None, take_profit=None
+):
     """Execute a paper trade (simulate, no real money)
 
     Returns:
@@ -137,7 +145,7 @@ def execute_paper_trade(action, price, positions_data, stop_loss=None, take_prof
             "stop_loss": stop_loss,
             "take_profit": take_profit,
             "trade_id": f"paper_{int(datetime.now().timestamp())}",
-            "action": "buy"
+            "action": "buy",
         }
         result["success"] = True
         result["message"] = f"🟢 OPENED LONG at ${price:,.2f}"
@@ -150,7 +158,7 @@ def execute_paper_trade(action, price, positions_data, stop_loss=None, take_prof
             "stop_loss": stop_loss,
             "take_profit": take_profit,
             "trade_id": f"paper_{int(datetime.now().timestamp())}",
-            "action": "sell"
+            "action": "sell",
         }
         result["success"] = True
         result["message"] = f"🔴 OPENED SHORT at ${price:,.2f}"
@@ -169,14 +177,16 @@ def execute_paper_trade(action, price, positions_data, stop_loss=None, take_prof
             emoji = "❌"
 
         # Add to history
-        positions_data["trade_history"].append({
-            "type": "long",
-            "entry_price": entry_price,
-            "exit_price": price,
-            "profit_loss": profit_loss,
-            "entry_time": positions_data["current_position"]["entry_time"],
-            "exit_time": datetime.now().isoformat()
-        })
+        positions_data["trade_history"].append(
+            {
+                "type": "long",
+                "entry_price": entry_price,
+                "exit_price": price,
+                "profit_loss": profit_loss,
+                "entry_time": positions_data["current_position"]["entry_time"],
+                "exit_time": datetime.now().isoformat(),
+            }
+        )
 
         # Reset position
         positions_data["current_position"] = {
@@ -186,12 +196,14 @@ def execute_paper_trade(action, price, positions_data, stop_loss=None, take_prof
             "stop_loss": None,
             "take_profit": None,
             "trade_id": None,
-            "action": None
+            "action": None,
         }
 
         result["success"] = True
         result["profit_loss"] = profit_loss
-        result["message"] = f"{emoji} CLOSED LONG at ${price:,.2f} | P/L: ${profit_loss:+,.2f}"
+        result["message"] = (
+            f"{emoji} CLOSED LONG at ${price:,.2f} | P/L: ${profit_loss:+,.2f}"
+        )
 
     elif action == "close_short":
         entry_price = positions_data["current_position"]["entry_price"]
@@ -207,14 +219,16 @@ def execute_paper_trade(action, price, positions_data, stop_loss=None, take_prof
             emoji = "❌"
 
         # Add to history
-        positions_data["trade_history"].append({
-            "type": "short",
-            "entry_price": entry_price,
-            "exit_price": price,
-            "profit_loss": profit_loss,
-            "entry_time": positions_data["current_position"]["entry_time"],
-            "exit_time": datetime.now().isoformat()
-        })
+        positions_data["trade_history"].append(
+            {
+                "type": "short",
+                "entry_price": entry_price,
+                "exit_price": price,
+                "profit_loss": profit_loss,
+                "entry_time": positions_data["current_position"]["entry_time"],
+                "exit_time": datetime.now().isoformat(),
+            }
+        )
 
         # Reset position
         positions_data["current_position"] = {
@@ -224,12 +238,14 @@ def execute_paper_trade(action, price, positions_data, stop_loss=None, take_prof
             "stop_loss": None,
             "take_profit": None,
             "trade_id": None,
-            "action": None
+            "action": None,
         }
 
         result["success"] = True
         result["profit_loss"] = profit_loss
-        result["message"] = f"{emoji} CLOSED SHORT at ${price:,.2f} | P/L: ${profit_loss:+,.2f}"
+        result["message"] = (
+            f"{emoji} CLOSED SHORT at ${price:,.2f} | P/L: ${profit_loss:+,.2f}"
+        )
 
     return result
 
@@ -264,32 +280,55 @@ def manage_positions(positions_data, trade_data, current_price, csv_data):
             # Validate trade levels before executing
             is_valid, error_msg = validate_trade_levels(trade_data, current_price)
             if not is_valid:
-                results.append({"success": False, "message": f"⚠️ Invalid trade levels: {error_msg}"})
+                results.append(
+                    {
+                        "success": False,
+                        "message": f"⚠️ Invalid trade levels: {error_msg}",
+                    }
+                )
             else:
                 result = execute_paper_trade(
-                    "open_long", current_price, positions_data,
-                    trade_data.get("stop_loss"), trade_data.get("take_profit")
+                    "open_long",
+                    current_price,
+                    positions_data,
+                    trade_data.get("stop_loss"),
+                    trade_data.get("take_profit"),
                 )
                 results.append(result)
         elif new_signal == "sell":
             # Validate trade levels before executing
             is_valid, error_msg = validate_trade_levels(trade_data, current_price)
             if not is_valid:
-                results.append({"success": False, "message": f"⚠️ Invalid trade levels: {error_msg}"})
+                results.append(
+                    {
+                        "success": False,
+                        "message": f"⚠️ Invalid trade levels: {error_msg}",
+                    }
+                )
             else:
                 result = execute_paper_trade(
-                    "open_short", current_price, positions_data,
-                    trade_data.get("stop_loss"), trade_data.get("take_profit")
+                    "open_short",
+                    current_price,
+                    positions_data,
+                    trade_data.get("stop_loss"),
+                    trade_data.get("take_profit"),
                 )
                 results.append(result)
         elif new_signal == "hold":
-            results.append({"success": True, "message": "⚪ No position | Signal: HOLD"})
+            results.append(
+                {"success": True, "message": "⚪ No position | Signal: HOLD"}
+            )
 
     elif current_status == "long":
         if new_signal == "buy":
             entry = positions_data["current_position"]["entry_price"]
             pl = current_price - entry
-            results.append({"success": True, "message": f"✅ Holding LONG (Entry: ${entry:,.2f}, Current P/L: ${pl:+,.2f})"})
+            results.append(
+                {
+                    "success": True,
+                    "message": f"✅ Holding LONG (Entry: ${entry:,.2f}, Current P/L: ${pl:+,.2f})",
+                }
+            )
         elif new_signal == "sell":
             # Close long, open short
             result1 = execute_paper_trade("close_long", current_price, positions_data)
@@ -298,11 +337,19 @@ def manage_positions(positions_data, trade_data, current_price, csv_data):
             # Validate before opening short
             is_valid, error_msg = validate_trade_levels(trade_data, current_price)
             if not is_valid:
-                results.append({"success": False, "message": f"⚠️ Invalid trade levels: {error_msg}"})
+                results.append(
+                    {
+                        "success": False,
+                        "message": f"⚠️ Invalid trade levels: {error_msg}",
+                    }
+                )
             else:
                 result2 = execute_paper_trade(
-                    "open_short", current_price, positions_data,
-                    trade_data.get("stop_loss"), trade_data.get("take_profit")
+                    "open_short",
+                    current_price,
+                    positions_data,
+                    trade_data.get("stop_loss"),
+                    trade_data.get("take_profit"),
                 )
                 results.append(result2)
         elif new_signal == "hold":
@@ -313,7 +360,12 @@ def manage_positions(positions_data, trade_data, current_price, csv_data):
         if new_signal == "sell":
             entry = positions_data["current_position"]["entry_price"]
             pl = entry - current_price  # Reversed for shorts
-            results.append({"success": True, "message": f"✅ Holding SHORT (Entry: ${entry:,.2f}, Current P/L: ${pl:+,.2f})"})
+            results.append(
+                {
+                    "success": True,
+                    "message": f"✅ Holding SHORT (Entry: ${entry:,.2f}, Current P/L: ${pl:+,.2f})",
+                }
+            )
         elif new_signal == "buy":
             # Close short, open long
             result1 = execute_paper_trade("close_short", current_price, positions_data)
@@ -322,11 +374,19 @@ def manage_positions(positions_data, trade_data, current_price, csv_data):
             # Validate before opening long
             is_valid, error_msg = validate_trade_levels(trade_data, current_price)
             if not is_valid:
-                results.append({"success": False, "message": f"⚠️ Invalid trade levels: {error_msg}"})
+                results.append(
+                    {
+                        "success": False,
+                        "message": f"⚠️ Invalid trade levels: {error_msg}",
+                    }
+                )
             else:
                 result2 = execute_paper_trade(
-                    "open_long", current_price, positions_data,
-                    trade_data.get("stop_loss"), trade_data.get("take_profit")
+                    "open_long",
+                    current_price,
+                    positions_data,
+                    trade_data.get("stop_loss"),
+                    trade_data.get("take_profit"),
                 )
                 results.append(result2)
         elif new_signal == "hold":
@@ -364,10 +424,10 @@ def fetch_btc_data():
     for candle in recent:
         ts = int(candle[0])  # Unix seconds
         open_price = candle[3]  # Open
-        high = candle[2]        # High
-        low = candle[1]         # Low
-        close = candle[4]       # Close
-        volume = candle[5]      # Volume
+        high = candle[2]  # High
+        low = candle[1]  # Low
+        close = candle[4]  # Close
+        volume = candle[5]  # Volume
         writer.writerow([ts, open_price, high, low, close, volume])
     return output.getvalue()
 
@@ -381,69 +441,79 @@ def generate_chart(data, trade_data=None, trade_invalid=False):
         trade_invalid: Boolean indicating if trade was rejected by validation
     """
     # Parse the data into a pandas DataFrame
-    lines = data.strip().split('\n')[1:]  # Skip header
+    lines = data.strip().split("\n")[1:]  # Skip header
     candles = []
     for line in lines:
-        parts = line.split(',')
+        parts = line.split(",")
         # Create UTC timestamp, convert to local time
-        utc_time = pd.to_datetime(int(parts[0]), unit='s', utc=True)
-        local_time = utc_time.tz_convert('America/New_York').tz_localize(None)  # Convert to ET and remove timezone
-        candles.append({
-            'timestamp': local_time,
-            'open': float(parts[1]),
-            'high': float(parts[2]),
-            'low': float(parts[3]),
-            'close': float(parts[4]),
-            'volume': float(parts[5])
-        })
+        utc_time = pd.to_datetime(int(parts[0]), unit="s", utc=True)
+        local_time = utc_time.tz_convert("America/New_York").tz_localize(
+            None
+        )  # Convert to ET and remove timezone
+        candles.append(
+            {
+                "timestamp": local_time,
+                "open": float(parts[1]),
+                "high": float(parts[2]),
+                "low": float(parts[3]),
+                "close": float(parts[4]),
+                "volume": float(parts[5]),
+            }
+        )
 
     df = pd.DataFrame(candles)
-    df.set_index('timestamp', inplace=True)
-    df.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
+    df.set_index("timestamp", inplace=True)
+    df.columns = ["Open", "High", "Low", "Close", "Volume"]
 
     # Create custom style for professional look
-    mc = mpf.make_marketcolors(up='#26a69a', down='#ef5350',
-                                edge='inherit',
-                                wick={'up':'#26a69a', 'down':'#ef5350'},
-                                volume='in')
-    style = mpf.make_mpf_style(marketcolors=mc, gridstyle=':',
-                                 y_on_right=False,
-                                 facecolor='#1e1e1e',
-                                 figcolor='#1e1e1e',
-                                 edgecolor='#555555',
-                                 gridcolor='#333333',
-                                 rc={
-                                     'axes.labelcolor': 'white',      # X and Y axis labels
-                                     'xtick.color': 'white',          # X axis tick labels
-                                     'ytick.color': 'white',          # Y axis tick labels
-                                     'axes.titlecolor': 'white',      # Chart title
-                                     'text.color': 'white'            # All text
-                                 })
+    mc = mpf.make_marketcolors(
+        up="#26a69a",
+        down="#ef5350",
+        edge="inherit",
+        wick={"up": "#26a69a", "down": "#ef5350"},
+        volume="in",
+    )
+    style = mpf.make_mpf_style(
+        marketcolors=mc,
+        gridstyle=":",
+        y_on_right=False,
+        facecolor="#1e1e1e",
+        figcolor="#1e1e1e",
+        edgecolor="#555555",
+        gridcolor="#333333",
+        rc={
+            "axes.labelcolor": "white",  # X and Y axis labels
+            "xtick.color": "white",  # X axis tick labels
+            "ytick.color": "white",  # Y axis tick labels
+            "axes.titlecolor": "white",  # Chart title
+            "text.color": "white",  # All text
+        },
+    )
 
     # Add horizontal lines for entry, stop-loss, and take-profit
     hlines_dict = None
-    if trade_data and trade_data.get('action') != 'hold':
+    if trade_data and trade_data.get("action") != "hold":
         values = []
         colors = []
         linestyles = []
         linewidths = []
 
-        if trade_data.get('entry_price'):
-            values.append(trade_data['entry_price'])
-            colors.append('#2196F3')  # Blue for entry
-            linestyles.append('--')
+        if trade_data.get("entry_price"):
+            values.append(trade_data["entry_price"])
+            colors.append("#2196F3")  # Blue for entry
+            linestyles.append("--")
             linewidths.append(1.5)
 
-        if trade_data.get('stop_loss'):
-            values.append(trade_data['stop_loss'])
-            colors.append('#FF5252')  # Red for stop-loss
-            linestyles.append('--')
+        if trade_data.get("stop_loss"):
+            values.append(trade_data["stop_loss"])
+            colors.append("#FF5252")  # Red for stop-loss
+            linestyles.append("--")
             linewidths.append(1.5)
 
-        if trade_data.get('take_profit'):
-            values.append(trade_data['take_profit'])
-            colors.append('#4CAF50')  # Green for take-profit
-            linestyles.append('--')
+        if trade_data.get("take_profit"):
+            values.append(trade_data["take_profit"])
+            colors.append("#4CAF50")  # Green for take-profit
+            linestyles.append("--")
             linewidths.append(1.5)
 
         if values:
@@ -452,41 +522,51 @@ def generate_chart(data, trade_data=None, trade_invalid=False):
                 colors=colors,
                 linestyle=linestyles,
                 linewidths=linewidths,
-                alpha=0.8
+                alpha=0.8,
             )
 
     # Save to BytesIO instead of file
     buf = BytesIO()
     plot_kwargs = {
-        'type': 'candle',
-        'style': style,
-        'volume': True,
-        'title': f'{CRYPTO_SYMBOL}/USD - Last {TIMEFRAME_MINUTES} Minutes (1-min candles)',
-        'returnfig': True  # Return figure object so we can add text
+        "type": "candle",
+        "style": style,
+        "volume": True,
+        "title": f"{CRYPTO_SYMBOL}/USD - Last {TIMEFRAME_MINUTES} Minutes (1-min candles)",
+        "returnfig": True,  # Return figure object so we can add text
     }
 
     # Only add hlines if we have trade data
     if hlines_dict:
-        plot_kwargs['hlines'] = hlines_dict
+        plot_kwargs["hlines"] = hlines_dict
 
     fig, axes = mpf.plot(df, **plot_kwargs)
 
     # Add "INVALID TRADE" text overlay if trade was rejected
-    if trade_invalid and trade_data and trade_data.get('action') != 'hold':
+    if trade_invalid and trade_data and trade_data.get("action") != "hold":
         # Add text to the main price chart (axes[0])
         ax = axes[0]
         # Position text at top-right of chart
-        ax.text(0.98, 0.95, 'INVALID TRADE',
-                transform=ax.transAxes,
-                fontsize=16,
-                fontweight='bold',
-                color='#FF5252',  # Red
-                bbox=dict(boxstyle='round,pad=0.5', facecolor='#1e1e1e', edgecolor='#FF5252', linewidth=2),
-                ha='right', va='top',
-                zorder=1000)
+        ax.text(
+            0.98,
+            0.95,
+            "INVALID TRADE",
+            transform=ax.transAxes,
+            fontsize=16,
+            fontweight="bold",
+            color="#FF5252",  # Red
+            bbox=dict(
+                boxstyle="round,pad=0.5",
+                facecolor="#1e1e1e",
+                edgecolor="#FF5252",
+                linewidth=2,
+            ),
+            ha="right",
+            va="top",
+            zorder=1000,
+        )
 
     # Save figure to buffer
-    fig.savefig(buf, dpi=150, bbox_inches='tight')
+    fig.savefig(buf, dpi=150, bbox_inches="tight")
     buf.seek(0)
     return buf
 
@@ -501,8 +581,8 @@ def analyze_with_llm(csv_data):
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
     # Get current price from latest candle
-    lines = csv_data.strip().split('\n')
-    latest_candle = lines[-1].split(',')
+    lines = csv_data.strip().split("\n")
+    latest_candle = lines[-1].split(",")
     current_price = float(latest_candle[4])  # Close price
 
     prompt = f"""You are a crypto TA expert specializing in SHORT-TERM scalping with STRONG technical levels. Analyze this {CRYPTO_SYMBOL}/USD 1m OHLCV data from the last {TIMEFRAME_MINUTES} minutes:
@@ -707,10 +787,17 @@ def parse_llm_response(response_text):
         try:
             trade_data = json.loads(json_match.group(0))
             # Extract analysis (everything before the JSON)
-            analysis = response_text[:json_match.start()].strip()
+            analysis = response_text[: json_match.start()].strip()
             # Clean up common markers
-            analysis = re.sub(r'^\*\*?ANALYSIS\*\*?:?\s*', '', analysis, flags=re.IGNORECASE)
-            analysis = re.sub(r'\*\*?TRADE_DATA\*\*?:?\s*.*$', '', analysis, flags=re.DOTALL | re.IGNORECASE)
+            analysis = re.sub(
+                r"^\*\*?ANALYSIS\*\*?:?\s*", "", analysis, flags=re.IGNORECASE
+            )
+            analysis = re.sub(
+                r"\*\*?TRADE_DATA\*\*?:?\s*.*$",
+                "",
+                analysis,
+                flags=re.DOTALL | re.IGNORECASE,
+            )
             return analysis.strip(), trade_data
         except json.JSONDecodeError:
             pass
@@ -725,13 +812,13 @@ def validate_trade_levels(trade_data, current_price):
     Returns:
         tuple: (is_valid, error_message)
     """
-    if not trade_data or trade_data.get('action') == 'hold':
+    if not trade_data or trade_data.get("action") == "hold":
         return True, None
 
-    action = trade_data.get('action')
+    action = trade_data.get("action")
     entry = current_price  # We use current price as entry
-    stop = trade_data.get('stop_loss')
-    target = trade_data.get('take_profit')
+    stop = trade_data.get("stop_loss")
+    target = trade_data.get("take_profit")
 
     # Check that levels exist
     if stop is None or target is None:
@@ -763,23 +850,42 @@ def validate_trade_levels(trade_data, current_price):
         return False, f"Risk-reward too high: {rr_ratio:.2f}:1 (maximum 3:1)"
 
     # For BUY (long): stop < entry < target
-    if action == 'buy':
+    if action == "buy":
         if stop >= entry:
-            return False, f"LONG: stop_loss (${stop:,.2f}) must be BELOW entry (${entry:,.2f})"
+            return (
+                False,
+                f"LONG: stop_loss (${stop:,.2f}) must be BELOW entry (${entry:,.2f})",
+            )
         if target <= entry:
-            return False, f"LONG: take_profit (${target:,.2f}) must be ABOVE entry (${entry:,.2f})"
+            return (
+                False,
+                f"LONG: take_profit (${target:,.2f}) must be ABOVE entry (${entry:,.2f})",
+            )
 
     # For SELL (short): target < entry < stop
-    elif action == 'sell':
+    elif action == "sell":
         if target >= entry:
-            return False, f"SHORT: take_profit (${target:,.2f}) must be BELOW entry (${entry:,.2f})"
+            return (
+                False,
+                f"SHORT: take_profit (${target:,.2f}) must be BELOW entry (${entry:,.2f})",
+            )
         if stop <= entry:
-            return False, f"SHORT: stop_loss (${stop:,.2f}) must be ABOVE entry (${entry:,.2f})"
+            return (
+                False,
+                f"SHORT: stop_loss (${stop:,.2f}) must be ABOVE entry (${entry:,.2f})",
+            )
 
     return True, None
 
 
-def send_to_discord(analysis, webhook_url, chart_image, trade_data=None, trade_results=None, positions_data=None):
+def send_to_discord(
+    analysis,
+    webhook_url,
+    chart_image,
+    trade_data=None,
+    trade_results=None,
+    positions_data=None,
+):
     """Send analysis and chart to Discord with position management info"""
 
     # Start with analysis
@@ -795,20 +901,26 @@ def send_to_discord(analysis, webhook_url, chart_image, trade_data=None, trade_r
     # Don't show levels if validation rejected the trade
     trade_was_accepted = False
     if positions_data:
-        current_status = positions_data.get('current_position', {}).get('status', 'none')
-        last_signal = positions_data.get('last_signal', 'hold')
+        current_status = positions_data.get("current_position", {}).get(
+            "status", "none"
+        )
+        last_signal = positions_data.get("last_signal", "hold")
         # Trade accepted if: there's an active position OR last_signal matches trade action
-        if current_status != 'none' or (trade_data and last_signal == trade_data.get('action')):
+        if current_status != "none" or (
+            trade_data and last_signal == trade_data.get("action")
+        ):
             trade_was_accepted = True
 
-    if trade_data and trade_data.get('action') != 'hold' and trade_was_accepted:
+    if trade_data and trade_data.get("action") != "hold" and trade_was_accepted:
         full_description += f"\n\n**📊 Trade Levels:**"
         full_description += f"\n🔵 Entry: ${trade_data.get('entry_price', 0):,.2f}"
         full_description += f"\n🔴 Stop Loss: ${trade_data.get('stop_loss', 0):,.2f}"
-        full_description += f"\n🟢 Take Profit: ${trade_data.get('take_profit', 0):,.2f}"
-        if 'confidence' in trade_data:
+        full_description += (
+            f"\n🟢 Take Profit: ${trade_data.get('take_profit', 0):,.2f}"
+        )
+        if "confidence" in trade_data:
             full_description += f"\n📈 Confidence: {trade_data['confidence']}%"
-    elif trade_data and trade_data.get('action') != 'hold' and not trade_was_accepted:
+    elif trade_data and trade_data.get("action") != "hold" and not trade_was_accepted:
         # Trade was rejected by validation
         full_description += f"\n\n**⚠️ Trade Rejected:** Signal was {trade_data.get('action', 'unknown').upper()} but validation failed (check stop distance, risk-reward ratio, or levels)"
 
@@ -822,8 +934,12 @@ def send_to_discord(analysis, webhook_url, chart_image, trade_data=None, trade_r
 
         # Calculate average win/loss from trade history
         trade_history = positions_data.get("trade_history", [])
-        total_profit = sum(t["profit_loss"] for t in trade_history if t["profit_loss"] > 0)
-        total_loss = abs(sum(t["profit_loss"] for t in trade_history if t["profit_loss"] < 0))
+        total_profit = sum(
+            t["profit_loss"] for t in trade_history if t["profit_loss"] > 0
+        )
+        total_loss = abs(
+            sum(t["profit_loss"] for t in trade_history if t["profit_loss"] < 0)
+        )
         avg_win = (total_profit / wins) if wins > 0 else 0
         avg_loss = (total_loss / losses) if losses > 0 else 0
         avg_ratio = (avg_win / avg_loss) if avg_loss > 0 else avg_win
@@ -835,7 +951,9 @@ def send_to_discord(analysis, webhook_url, chart_image, trade_data=None, trade_r
             if losses > 0:
                 full_description += f"\n📊 Avg W:L: {avg_ratio:.2f}:1 (avg win: ${avg_win:.2f}, avg loss: ${avg_loss:.2f})"
             else:
-                full_description += f"\n📊 Avg W:L: Perfect! (${avg_win:.2f} avg win, no losses)"
+                full_description += (
+                    f"\n📊 Avg W:L: Perfect! (${avg_win:.2f} avg win, no losses)"
+                )
             full_description += f"\n🎯 Win Rate: {win_rate:.1f}%"
 
     # Format as Discord embed for better readability
@@ -849,9 +967,7 @@ def send_to_discord(analysis, webhook_url, chart_image, trade_data=None, trade_r
                 else 0xFFA500
                 if "hold" in analysis.lower()
                 else 0xFF0000,  # Green/Yellow/Red based on rec
-                "image": {
-                    "url": "attachment://chart.png"
-                },
+                "image": {"url": "attachment://chart.png"},
                 "footer": {
                     "text": f"Paper Trading | {os.getenv('GITHUB_RUN_ID', 'Local')}"
                 },
@@ -861,12 +977,8 @@ def send_to_discord(analysis, webhook_url, chart_image, trade_data=None, trade_r
     }
 
     # Send with file attachment
-    files = {
-        'file': ('chart.png', chart_image, 'image/png')
-    }
-    data = {
-        'payload_json': json.dumps(payload)
-    }
+    files = {"file": ("chart.png", chart_image, "image/png")}
+    data = {"payload_json": json.dumps(payload)}
 
     response = requests.post(webhook_url, data=data, files=files)
     if response.status_code != 204 and response.status_code != 200:
@@ -876,18 +988,20 @@ def send_to_discord(analysis, webhook_url, chart_image, trade_data=None, trade_r
 
 
 if __name__ == "__main__":
-    print("="*70)
+    print("=" * 70)
     print(f"🤖 {CRYPTO_SYMBOL} TRADING BOT - PAPER TRADING MODE")
-    print("="*70)
+    print("=" * 70)
 
     # Load current position state
     positions_data = load_positions()
-    print(f"\n📊 Current Status: {positions_data['current_position']['status'].upper()}")
-    if positions_data['current_position']['status'] != 'none':
+    print(
+        f"\n📊 Current Status: {positions_data['current_position']['status'].upper()}"
+    )
+    if positions_data["current_position"]["status"] != "none":
         print(f"   Entry: ${positions_data['current_position']['entry_price']:,.2f}")
 
     # Show stats if there are any trades
-    if positions_data.get('total_trades', 0) > 0:
+    if positions_data.get("total_trades", 0) > 0:
         balance = positions_data.get("paper_trading_balance", 10000)
         total = positions_data.get("total_trades", 0)
         wins = positions_data.get("winning_trades", 0)
@@ -896,8 +1010,12 @@ if __name__ == "__main__":
 
         # Calculate average win/loss from trade history
         trade_history = positions_data.get("trade_history", [])
-        total_profit = sum(t["profit_loss"] for t in trade_history if t["profit_loss"] > 0)
-        total_loss = abs(sum(t["profit_loss"] for t in trade_history if t["profit_loss"] < 0))
+        total_profit = sum(
+            t["profit_loss"] for t in trade_history if t["profit_loss"] > 0
+        )
+        total_loss = abs(
+            sum(t["profit_loss"] for t in trade_history if t["profit_loss"] < 0)
+        )
         avg_win = (total_profit / wins) if wins > 0 else 0
         avg_loss = (total_loss / losses) if losses > 0 else 0
         avg_ratio = (avg_win / avg_loss) if avg_loss > 0 else avg_win
@@ -906,7 +1024,9 @@ if __name__ == "__main__":
         print(f"   💰 Balance: ${balance:,.2f}")
         print(f"   📊 Trades: {total} ({wins}W / {losses}L)")
         if losses > 0:
-            print(f"   📊 Avg W:L: {avg_ratio:.2f}:1 (avg win: ${avg_win:.2f}, avg loss: ${avg_loss:.2f})")
+            print(
+                f"   📊 Avg W:L: {avg_ratio:.2f}:1 (avg win: ${avg_win:.2f}, avg loss: ${avg_loss:.2f})"
+            )
         else:
             print(f"   📊 Avg W:L: Perfect! (${avg_win:.2f} avg win, no losses)")
         print(f"   🎯 Win Rate: {win_rate:.1f}%")
@@ -917,8 +1037,8 @@ if __name__ == "__main__":
     print("✅ Data fetched successfully\n")
 
     # Get current price
-    lines = data.strip().split('\n')
-    latest_candle = lines[-1].split(',')
+    lines = data.strip().split("\n")
+    latest_candle = lines[-1].split(",")
     current_price = float(latest_candle[4])
     print(f"💵 Current {CRYPTO_SYMBOL} Price: ${current_price:,.2f}\n")
 
@@ -950,7 +1070,9 @@ if __name__ == "__main__":
     trade_invalid = False
     if trade_results:
         for result in trade_results:
-            if not result.get('success', True) and "Invalid trade levels" in result.get('message', ''):
+            if not result.get("success", True) and "Invalid trade levels" in result.get(
+                "message", ""
+            ):
                 trade_invalid = True
                 break
 
@@ -961,13 +1083,20 @@ if __name__ == "__main__":
     webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
     if webhook_url:
         print("📤 Sending to Discord...")
-        send_to_discord(analysis, webhook_url, chart_image, trade_data, trade_results, positions_data)
+        send_to_discord(
+            analysis,
+            webhook_url,
+            chart_image,
+            trade_data,
+            trade_results,
+            positions_data,
+        )
     else:
         print("⚠️  No Discord webhook configured")
         print(f"\nLLM Analysis:\n{analysis}")
         if trade_data:
             print(f"\nTrade Data: {json.dumps(trade_data, indent=2)}")
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("✅ BOT RUN COMPLETE")
-    print("="*70)
+    print("=" * 70)
