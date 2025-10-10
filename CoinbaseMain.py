@@ -23,6 +23,7 @@ FUTURES_PRODUCT_ID = "ET-31OCT25-CDE"  # ETH Futures (Oct 31, 2025)
 CRYPTO_SYMBOL = "ETH"  # For display purposes
 TIMEFRAME_MINUTES = 120  # How many minutes of data to fetch
 CONTRACTS_PER_TRADE = 1  # Number of contracts to trade (0.1 ETH each)
+CONTRACT_MULTIPLIER = 0.1  # 0.1 ETH per contract for nano ETH futures
 
 # Trading mode
 PAPER_TRADING = False  # ⚠️ SET TO True FOR TESTING, False FOR REAL TRADING
@@ -53,6 +54,7 @@ def load_positions():
                 "action": None,
                 "stop_loss_order_id": None,
                 "take_profit_order_id": None,
+                "unrealized_pnl": None,
             },
             "last_signal": "hold",
             "trade_history": [],
@@ -153,6 +155,7 @@ def execute_paper_trade(
             "action": "buy",
             "stop_loss_order_id": None,
             "take_profit_order_id": None,
+            "unrealized_pnl": None,
         }
         result["success"] = True
         result["message"] = f"🟢 OPENED LONG at ${price:,.2f}"
@@ -168,6 +171,7 @@ def execute_paper_trade(
             "action": "sell",
             "stop_loss_order_id": None,
             "take_profit_order_id": None,
+            "unrealized_pnl": None,
         }
         result["success"] = True
         result["message"] = f"🔴 OPENED SHORT at ${price:,.2f}"
@@ -208,6 +212,7 @@ def execute_paper_trade(
             "action": None,
             "stop_loss_order_id": None,
             "take_profit_order_id": None,
+            "unrealized_pnl": None,
         }
 
         result["success"] = True
@@ -252,6 +257,7 @@ def execute_paper_trade(
             "action": None,
             "stop_loss_order_id": None,
             "take_profit_order_id": None,
+            "unrealized_pnl": None,
         }
 
         result["success"] = True
@@ -397,6 +403,7 @@ def place_stop_loss_order(client, position_type, contracts, stop_price):
         }
 
     except Exception as e:
+        print(f"Error details: {e}")  # FIXED: Add logging for debugging
         return {
             "success": False,
             "order_id": None,
@@ -449,6 +456,7 @@ def place_take_profit_order(client, position_type, contracts, target_price):
         }
 
     except Exception as e:
+        print(f"Error details: {e}")  # FIXED: Add logging for debugging
         return {
             "success": False,
             "order_id": None,
@@ -592,6 +600,9 @@ def execute_trade(
             positions_data["current_position"]["entry_time"] = (
                 datetime.now().isoformat()
             )
+            positions_data["current_position"]["unrealized_pnl"] = (
+                0.0  # Initial for new position
+            )
 
         # ✅ NEW: Cancel pending orders when closing position
         elif result.get("success") and action in ["close_long", "close_short"]:
@@ -643,6 +654,7 @@ def execute_trade(
                 "action": None,
                 "stop_loss_order_id": None,
                 "take_profit_order_id": None,
+                "unrealized_pnl": None,
             }
 
         return result
@@ -733,13 +745,50 @@ def manage_positions(positions_data, trade_data, current_price, csv_data, client
     elif current_status == "long":
         if new_signal == "buy":
             entry = positions_data["current_position"]["entry_price"]
-            pl = current_price - entry
+            pl = positions_data["current_position"].get(
+                "unrealized_pnl", current_price - entry
+            )  # FIXED: Use stored pnl if available
             results.append(
                 {
                     "success": True,
                     "message": f"✅ Holding LONG (Entry: ${entry:,.2f}, Current P/L: ${pl:+,.2f})",
                 }
             )
+            # FIXED: Place missing stop/TP if None
+            if positions_data["current_position"][
+                "stop_loss_order_id"
+            ] is None and trade_data.get("stop_loss"):
+                print(
+                    f"   📍 Placing missing stop-loss at ${trade_data['stop_loss']:.2f}..."
+                )
+                stop_result = place_stop_loss_order(
+                    client, "long", CONTRACTS_PER_TRADE, trade_data["stop_loss"]
+                )
+                if stop_result.get("success"):
+                    positions_data["current_position"]["stop_loss"] = trade_data[
+                        "stop_loss"
+                    ]
+                    positions_data["current_position"]["stop_loss_order_id"] = (
+                        stop_result.get("order_id")
+                    )
+                results[0]["message"] += f"\n   {stop_result['message']}"
+            if positions_data["current_position"][
+                "take_profit_order_id"
+            ] is None and trade_data.get("take_profit"):
+                print(
+                    f"   🎯 Placing missing take-profit at ${trade_data['take_profit']:.2f}..."
+                )
+                tp_result = place_take_profit_order(
+                    client, "long", CONTRACTS_PER_TRADE, trade_data["take_profit"]
+                )
+                if tp_result.get("success"):
+                    positions_data["current_position"]["take_profit"] = trade_data[
+                        "take_profit"
+                    ]
+                    positions_data["current_position"]["take_profit_order_id"] = (
+                        tp_result.get("order_id")
+                    )
+                results[0]["message"] += f"\n   {tp_result['message']}"
         elif new_signal == "sell":
             # Close long, open short
             result1 = execute_trade(
@@ -775,13 +824,50 @@ def manage_positions(positions_data, trade_data, current_price, csv_data, client
     elif current_status == "short":
         if new_signal == "sell":
             entry = positions_data["current_position"]["entry_price"]
-            pl = entry - current_price  # Reversed for shorts
+            pl = positions_data["current_position"].get(
+                "unrealized_pnl", entry - current_price
+            )  # FIXED: Use stored pnl if available
             results.append(
                 {
                     "success": True,
                     "message": f"✅ Holding SHORT (Entry: ${entry:,.2f}, Current P/L: ${pl:+,.2f})",
                 }
             )
+            # FIXED: Place missing stop/TP if None
+            if positions_data["current_position"][
+                "stop_loss_order_id"
+            ] is None and trade_data.get("stop_loss"):
+                print(
+                    f"   📍 Placing missing stop-loss at ${trade_data['stop_loss']:.2f}..."
+                )
+                stop_result = place_stop_loss_order(
+                    client, "short", CONTRACTS_PER_TRADE, trade_data["stop_loss"]
+                )
+                if stop_result.get("success"):
+                    positions_data["current_position"]["stop_loss"] = trade_data[
+                        "stop_loss"
+                    ]
+                    positions_data["current_position"]["stop_loss_order_id"] = (
+                        stop_result.get("order_id")
+                    )
+                results[0]["message"] += f"\n   {stop_result['message']}"
+            if positions_data["current_position"][
+                "take_profit_order_id"
+            ] is None and trade_data.get("take_profit"):
+                print(
+                    f"   🎯 Placing missing take-profit at ${trade_data['take_profit']:.2f}..."
+                )
+                tp_result = place_take_profit_order(
+                    client, "short", CONTRACTS_PER_TRADE, trade_data["take_profit"]
+                )
+                if tp_result.get("success"):
+                    positions_data["current_position"]["take_profit"] = trade_data[
+                        "take_profit"
+                    ]
+                    positions_data["current_position"]["take_profit_order_id"] = (
+                        tp_result.get("order_id")
+                    )
+                results[0]["message"] += f"\n   {tp_result['message']}"
         elif new_signal == "buy":
             # Close short, open long
             result1 = execute_trade(
@@ -1338,32 +1424,53 @@ def send_to_discord(
         for result in trade_results:
             full_description += f"\n{result['message']}"
 
-    # Add trade levels ONLY if trade was accepted (check if there's an active position or if signal matches)
-    # Don't show levels if validation rejected the trade
-    trade_was_accepted = False
-    if positions_data:
-        current_status = positions_data.get("current_position", {}).get(
-            "status", "none"
-        )
-        last_signal = positions_data.get("last_signal", "hold")
-        # Trade accepted if: there's an active position OR last_signal matches trade action
-        if current_status != "none" or (
-            trade_data and last_signal == trade_data.get("action")
-        ):
-            trade_was_accepted = True
-
-    if trade_data and trade_data.get("action") != "hold" and trade_was_accepted:
-        full_description += f"\n\n**📊 Trade Levels:**"
-        full_description += f"\n🔵 Entry: ${trade_data.get('entry_price', 0):,.2f}"
-        full_description += f"\n🔴 Stop Loss: ${trade_data.get('stop_loss', 0):,.2f}"
+    # FIXED: Show levels from current position if exists, else from trade_data if new/invalid trade
+    current_status = (
+        positions_data.get("current_position", {}).get("status", "none")
+        if positions_data
+        else "none"
+    )
+    if current_status != "none":
+        # Show existing position levels (if set)
+        entry = positions_data["current_position"].get("entry_price", "N/A")
+        stop = positions_data["current_position"].get("stop_loss", "N/A")
+        tp = positions_data["current_position"].get("take_profit", "N/A")
+        full_description += f"\n\n**📊 Current Position Levels:**"
         full_description += (
-            f"\n🟢 Take Profit: ${trade_data.get('take_profit', 0):,.2f}"
+            f"\n🔵 Entry: ${entry:,.2f}"
+            if isinstance(entry, (int, float))
+            else f"\n🔵 Entry: {entry}"
+        )
+        full_description += (
+            f"\n🔴 Stop Loss: ${stop:,.2f}"
+            if isinstance(stop, (int, float))
+            else f"\n🔴 Stop Loss: {stop}"
+        )
+        full_description += (
+            f"\n🟢 Take Profit: ${tp:,.2f}"
+            if isinstance(tp, (int, float))
+            else f"\n🟢 Take Profit: {tp}"
         )
         if "confidence" in trade_data:
             full_description += f"\n📈 Confidence: {trade_data['confidence']}%"
-    elif trade_data and trade_data.get("action") != "hold" and not trade_was_accepted:
-        # Trade was rejected by validation
-        full_description += f"\n\n**⚠️ Trade Rejected:** Signal was {trade_data.get('action', 'unknown').upper()} but validation failed (check stop distance, risk-reward ratio, or levels)"
+    elif trade_data and trade_data.get("action") != "hold":
+        # Show proposed levels for new trades
+        is_invalid = any(
+            "Invalid trade levels" in r.get("message", "") for r in trade_results or []
+        )
+        if is_invalid:
+            full_description += f"\n\n**⚠️ Trade Rejected:** Signal was {trade_data.get('action', 'unknown').upper()} but validation failed (check stop distance, risk-reward ratio, or levels)"
+        else:
+            full_description += f"\n\n**📊 Trade Levels:**"
+            full_description += f"\n🔵 Entry: ${trade_data.get('entry_price', 0):,.2f}"
+            full_description += (
+                f"\n🔴 Stop Loss: ${trade_data.get('stop_loss', 0):,.2f}"
+            )
+            full_description += (
+                f"\n🟢 Take Profit: ${trade_data.get('take_profit', 0):,.2f}"
+            )
+            if "confidence" in trade_data:
+                full_description += f"\n📈 Confidence: {trade_data['confidence']}%"
 
     # Add performance stats
     if positions_data and PAPER_TRADING:  # FIXED: Only show in paper mode
@@ -1506,10 +1613,9 @@ if __name__ == "__main__":
     print("📊 Checking actual futures position on Coinbase...")
     real_position = get_current_futures_position(client)
 
-    if real_position.get("exists") is None:  # FIXED: API error detected
+    if real_position.get("exists") is None:
         error_msg = real_position.get("error", "Unknown API error")
         print(f"   ⚠️ API error (keeping local state): {error_msg}")
-        # Do NOT sync or clear - trust local positions.json
     elif real_position["exists"]:
         print(
             f"   ✅ Position found: {real_position['side']} - {real_position['size']} contract(s)"
@@ -1521,7 +1627,22 @@ if __name__ == "__main__":
         positions_data["current_position"]["status"] = real_position["side"].lower()
         positions_data["current_position"]["entry_price"] = real_position["entry_price"]
         positions_data["current_position"]["entry_time"] = datetime.now().isoformat()
-        # Note: We can't get exact stop/target from Coinbase, will set on next trade
+        positions_data["current_position"]["unrealized_pnl"] = real_position[
+            "unrealized_pnl"
+        ]  # FIXED: Store for accurate P/L display
+
+        # FIXED: If entry_vwap == 0, back-calculate entry from unrealized_pnl
+        if positions_data["current_position"]["entry_price"] == 0:
+            pnl = real_position["unrealized_pnl"]
+            size = real_position["size"]
+            if size > 0 and pnl is not None:
+                if real_position["side"] == "LONG":
+                    entry = current_price - (pnl / (size * CONTRACT_MULTIPLIER))
+                else:  # SHORT
+                    entry = current_price + (pnl / (size * CONTRACT_MULTIPLIER))
+                positions_data["current_position"]["entry_price"] = entry
+                print(f"   🔄 Back-calculated entry price: ${entry:,.2f} (from P/L)")
+
         print("   🔄 Synced local state with Coinbase position")
     else:  # No error, but no position on API
         local_has_pos = positions_data["current_position"]["status"] != "none"
@@ -1537,6 +1658,7 @@ if __name__ == "__main__":
         positions_data["current_position"]["entry_time"] = None
         positions_data["current_position"]["stop_loss"] = None
         positions_data["current_position"]["take_profit"] = None
+        positions_data["current_position"]["unrealized_pnl"] = None
         if local_has_pos:
             print("   🔄 Local state cleared (desync resolved)")
         else:
