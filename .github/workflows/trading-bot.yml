@@ -1,4 +1,4 @@
-name: BTC Trading Bot
+name: ETH Futures Trading Bot
 
 on:
   schedule:
@@ -24,12 +24,14 @@ jobs:
         pip install --upgrade pip
         pip install -r requirements.txt
 
-    - name: Run trading bot
+    - name: Run ETH futures trading bot
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        COINBASE_API_KEY: ${{ secrets.COINBASE_API_KEY }}
+        COINBASE_API_SECRET: ${{ secrets.COINBASE_API_SECRET }}
       run: |
-        python main.py
+        python CoinbaseMain.py
 
     - name: Commit and push updated positions
       run: |
