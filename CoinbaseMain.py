@@ -303,19 +303,38 @@ def execute_real_futures_trade(action, contracts, client):
                 base_size=str(contracts),
             )
 
-        # Extract order details from response
-        order_dict = order.to_dict() if hasattr(order, "to_dict") else {}
-        order_id = order_dict.get("order_id", "unknown")
-        status = order_dict.get("status", "unknown")
+        # FIXED: order is already a dict
+        order_dict = order
+        if order_dict.get("success", False):
+            order_id = order_dict["success_response"].get("order_id", "unknown")
 
-        # Get filled price if available
-        fills = order_dict.get("order_configuration", {}).get("market_market_ioc", {})
+            # FIXED: Fetch status separately
+            try:
+                status_resp = client.get_order(order_id=order_id)
+                status_dict = (
+                    status_resp.get("order", {})
+                    if status_resp.get("success", False)
+                    else {}
+                )
+                status = status_dict.get(
+                    "status", "FILLED"
+                )  # Market IOC usually FILLED
+            except Exception as status_err:
+                print(f"Warning: Could not fetch order status: {status_err}")
+                status = "FILLED"  # Assume for market orders
 
-        result["success"] = True
-        result["order_id"] = order_id
-        result["message"] = (
-            f"{'🟢' if order_side == 'BUY' else '🔴'} {action.replace('_', ' ').upper()} - {contracts} contract(s) | Order ID: {order_id[:8]}... | Status: {status}"
-        )
+            result["success"] = True
+            result["order_id"] = order_id
+            result["message"] = (
+                f"{'🟢' if order_side == 'BUY' else '🔴'} {action.replace('_', ' ').upper()} - {contracts} contract(s) | Order ID: {order_id[:8]}... | Status: {status}"
+            )
+        else:
+            error_msg = order_dict.get("error_response", {}).get(
+                "message", "Unknown error"
+            )
+            result["message"] = f"❌ Trade execution failed: {error_msg}"
+            result["order_id"] = "failed"
+            result["status"] = "failed"
 
     except Exception as e:
         result["message"] = f"❌ Trade execution failed: {e}"
@@ -455,22 +474,34 @@ def get_current_futures_position(client):
     """Get current futures position from Coinbase
 
     Returns:
-        dict: Position info (size, side, unrealized_pnl, etc.)
+        dict: Position info (size, side, unrealized_pnl, etc.) or {"exists": None, "error": str} on failure
     """
     try:
         # Get futures positions
         positions = client.list_futures_positions()
 
         # Look for position in our futures product
-        for position in getattr(positions, "positions", []):
+        pos_list = (
+            getattr(positions, "positions", [])
+            if hasattr(positions, "positions")
+            else positions.get("positions", [])
+            if isinstance(positions, dict)
+            else []
+        )
+
+        for position in pos_list:
             product_id = getattr(position, "product_id", "")
             if product_id == FUTURES_PRODUCT_ID:
                 size = float(getattr(position, "number_of_contracts", 0))
                 side = getattr(position, "side", "UNKNOWN")
                 entry_price = float(getattr(position, "entry_vwap", 0))
-                unrealized_pnl = float(
-                    getattr(position, "unrealized_pnl", {}).get("value", 0)
-                )
+
+                # FIXED: Safely handle unrealized_pnl as dict or fallback
+                pnl_obj = getattr(position, "unrealized_pnl", {})
+                if isinstance(pnl_obj, dict):
+                    unrealized_pnl = float(pnl_obj.get("value", 0))
+                else:
+                    unrealized_pnl = 0.0
 
                 return {
                     "exists": True,
@@ -484,8 +515,11 @@ def get_current_futures_position(client):
         return {"exists": False, "size": 0, "side": None}
 
     except Exception as e:
-        print(f"Error getting position: {e}")
-        return {"exists": False, "size": 0, "side": None}
+        print(f"API error details: {e}")  # For debugging
+        return {
+            "exists": None,
+            "error": str(e),
+        }  # FIXED: Flag error instead of fake "no position"
 
 
 def execute_trade(
@@ -1327,7 +1361,7 @@ def send_to_discord(
         full_description += f"\n\n**⚠️ Trade Rejected:** Signal was {trade_data.get('action', 'unknown').upper()} but validation failed (check stop distance, risk-reward ratio, or levels)"
 
     # Add performance stats
-    if positions_data:
+    if positions_data and PAPER_TRADING:  # FIXED: Only show in paper mode
         balance = positions_data.get("paper_trading_balance", 10000)
         total = positions_data.get("total_trades", 0)
         wins = positions_data.get("winning_trades", 0)
@@ -1464,42 +1498,51 @@ if __name__ == "__main__":
     print(f"💵 Current {CRYPTO_SYMBOL} Futures Price: ${current_price:,.2f}\n")
 
     # If real trading, get actual position from Coinbase and sync state
-    if not PAPER_TRADING:
-        print("📊 Checking actual futures position on Coinbase...")
-        real_position = get_current_futures_position(client)
+    # If real trading, get actual position from Coinbase and sync state
+    print("📊 Checking actual futures position on Coinbase...")
+    real_position = get_current_futures_position(client)
 
-        if real_position["exists"]:
+    if real_position.get("exists") is None:  # FIXED: API error detected
+        error_msg = real_position.get("error", "Unknown API error")
+        print(f"   ⚠️ API error (keeping local state): {error_msg}")
+        # Do NOT sync or clear - trust local positions.json
+    elif real_position["exists"]:
+        print(
+            f"   ✅ Position found: {real_position['side']} - {real_position['size']} contract(s)"
+        )
+        print(f"   Entry: ${real_position['entry_price']:,.2f}")
+        print(f"   Unrealized P/L: ${real_position['unrealized_pnl']:+,.2f}")
+
+        # Sync positions.json with actual Coinbase position
+        positions_data["current_position"]["status"] = real_position["side"].lower()
+        positions_data["current_position"]["entry_price"] = real_position["entry_price"]
+        positions_data["current_position"]["entry_time"] = datetime.now().isoformat()
+        # Note: We can't get exact stop/target from Coinbase, will set on next trade
+        print("   🔄 Synced local state with Coinbase position")
+    else:  # No error, but no position on API
+        local_has_pos = positions_data["current_position"]["status"] != "none"
+        if local_has_pos:
             print(
-                f"   ✅ Position found: {real_position['side']} - {real_position['size']} contract(s)"
+                "   ⚠️ API shows no position, but local has one. Assuming closed externally (e.g., stop hit)."
             )
-            print(f"   Entry: ${real_position['entry_price']:,.2f}")
-            print(f"   Unrealized P/L: ${real_position['unrealized_pnl']:+,.2f}")
-
-            # Sync positions.json with actual Coinbase position
-            positions_data["current_position"]["status"] = real_position["side"].lower()
-            positions_data["current_position"]["entry_price"] = real_position[
-                "entry_price"
-            ]
-            positions_data["current_position"]["entry_time"] = (
-                datetime.now().isoformat()
-            )
-            # Note: We can't get exact stop/target from Coinbase, will set on next trade
-            print("   🔄 Synced local state with Coinbase position")
         else:
             print("   ✅ No open position on Coinbase")
-            # Make sure local state shows no position
-            positions_data["current_position"]["status"] = "none"
-            positions_data["current_position"]["entry_price"] = None
-            positions_data["current_position"]["entry_time"] = None
-            positions_data["current_position"]["stop_loss"] = None
-            positions_data["current_position"]["take_profit"] = None
+        # FIXED: Always clear local to match API (but only if no error)
+        positions_data["current_position"]["status"] = "none"
+        positions_data["current_position"]["entry_price"] = None
+        positions_data["current_position"]["entry_time"] = None
+        positions_data["current_position"]["stop_loss"] = None
+        positions_data["current_position"]["take_profit"] = None
+        if local_has_pos:
+            print("   🔄 Local state cleared (desync resolved)")
+        else:
             print("   🔄 Local state cleared (no position)")
-        print()
+            print()
 
-    # Analyze with LLM (now returns analysis + trade data)
-    print("🧠 Analyzing with ChatGPT...")
-    analysis, trade_data = analyze_with_llm(data)
-    print("✅ Analysis complete\n")
+            # Analyze with LLM (now returns analysis + trade data)
+            print("🧠 Analyzing with ChatGPT...")
+            analysis, trade_data = analyze_with_llm(data)
+            print("✅ Analysis complete\n")
 
     # Print trade data for debugging
     if trade_data:
