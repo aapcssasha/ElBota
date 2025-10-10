@@ -10,7 +10,7 @@
     "stop_loss_order_id": null,
     "take_profit_order_id": null
   },
-  "last_signal": "buy",
+  "last_signal": "hold",
   "trade_history": [],
   "paper_trading_balance": 2000.0,
   "total_trades": 0,
