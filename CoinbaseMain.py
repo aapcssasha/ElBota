@@ -10,6 +10,7 @@ import pandas as pd
 import mplfinance as mpf
 from io import BytesIO
 import re
+import uuid  # For generating unique order IDs
 
 # Load environment variables from .env file
 load_dotenv()
@@ -276,14 +277,21 @@ def execute_real_futures_trade(action, contracts, client):
             result["message"] = f"❌ Unknown action: {action}"
             return result
 
-        # Create market order for futures
-        order = client.market_order_buy(
-            product_id=FUTURES_PRODUCT_ID,
-            base_size=str(contracts)
-        ) if order_side == "BUY" else client.market_order_sell(
-            product_id=FUTURES_PRODUCT_ID,
-            base_size=str(contracts)
-        )
+        # Create market order for futures (generate unique order ID)
+        client_order_id = str(uuid.uuid4())
+
+        if order_side == "BUY":
+            order = client.market_order_buy(
+                client_order_id=client_order_id,
+                product_id=FUTURES_PRODUCT_ID,
+                base_size=str(contracts)
+            )
+        else:  # SELL
+            order = client.market_order_sell(
+                client_order_id=client_order_id,
+                product_id=FUTURES_PRODUCT_ID,
+                base_size=str(contracts)
+            )
 
         # Extract order details
         order_id = getattr(order, 'order_id', 'unknown')
