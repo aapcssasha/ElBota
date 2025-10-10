@@ -1650,6 +1650,31 @@ if __name__ == "__main__":
             print(
                 "   ⚠️ API shows no position, but local has one. Assuming closed externally (e.g., stop hit)."
             )
+            # FIXED: Add closure to history with estimated P/L
+            entry = positions_data["current_position"]["entry_price"]
+            if entry is not None:
+                if positions_data["current_position"]["status"] == "long":
+                    profit_loss = current_price - entry
+                    trade_type = "long"
+                else:
+                    profit_loss = entry - current_price
+                    trade_type = "short"
+                positions_data["trade_history"].append(
+                    {
+                        "type": trade_type,
+                        "entry_price": entry,
+                        "exit_price": current_price,  # Approximate with current
+                        "profit_loss": profit_loss,
+                        "entry_time": positions_data["current_position"]["entry_time"],
+                        "exit_time": datetime.now().isoformat(),
+                        "note": "Closed externally (desync detected)",
+                    }
+                )
+                positions_data["total_trades"] += 1
+                if profit_loss > 0:
+                    positions_data["winning_trades"] += 1
+                else:
+                    positions_data["losing_trades"] += 1
         else:
             print("   ✅ No open position on Coinbase")
         # FIXED: Always clear local to match API (but only if no error)
