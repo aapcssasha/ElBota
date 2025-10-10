@@ -51,7 +51,7 @@ def load_positions():
             },
             "last_signal": "hold",
             "trade_history": [],
-            "paper_trading_balance": 10000.0,
+            "paper_trading_balance": 2000.0,
             "total_trades": 0,
             "winning_trades": 0,
             "losing_trades": 0,
@@ -545,10 +545,10 @@ def generate_chart(data, trade_data=None, trade_invalid=False):
     if trade_invalid and trade_data and trade_data.get("action") != "hold":
         # Add text to the main price chart (axes[0])
         ax = axes[0]
-        # Position text at top-right of chart
+        # Position text at left side, vertically centered (25% from left, 50% from bottom)
         ax.text(
-            0.98,
-            0.95,
+            0.25,
+            0.50,
             "INVALID TRADE",
             transform=ax.transAxes,
             fontsize=16,
@@ -560,8 +560,8 @@ def generate_chart(data, trade_data=None, trade_invalid=False):
                 edgecolor="#FF5252",
                 linewidth=2,
             ),
-            ha="right",
-            va="top",
+            ha="center",
+            va="center",
             zorder=1000,
         )
 
