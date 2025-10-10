@@ -566,6 +566,33 @@ def execute_trade(
                 print(f"   🚫 Cancelling {len(order_ids)} pending orders...")
                 cancel_pending_orders(client, order_ids)
 
+            # Calculate P/L for real trading
+            entry_price = positions_data["current_position"].get("entry_price")
+            if entry_price:
+                if action == "close_long":
+                    profit_loss = price - entry_price
+                else:  # close_short
+                    profit_loss = entry_price - price
+
+                # Update trade statistics
+                positions_data["total_trades"] += 1
+                if profit_loss > 0:
+                    positions_data["winning_trades"] += 1
+                else:
+                    positions_data["losing_trades"] += 1
+
+                # Add to trade history
+                positions_data["trade_history"].append(
+                    {
+                        "type": "long" if action == "close_long" else "short",
+                        "entry_price": entry_price,
+                        "exit_price": price,
+                        "profit_loss": profit_loss,
+                        "entry_time": positions_data["current_position"]["entry_time"],
+                        "exit_time": datetime.now().isoformat(),
+                    }
+                )
+
             # Clear positions data
             positions_data["current_position"] = {
                 "status": "none",
