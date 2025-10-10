@@ -1498,7 +1498,6 @@ if __name__ == "__main__":
     print(f"💵 Current {CRYPTO_SYMBOL} Futures Price: ${current_price:,.2f}\n")
 
     # If real trading, get actual position from Coinbase and sync state
-    # If real trading, get actual position from Coinbase and sync state
     print("📊 Checking actual futures position on Coinbase...")
     real_position = get_current_futures_position(client)
 
@@ -1537,12 +1536,11 @@ if __name__ == "__main__":
             print("   🔄 Local state cleared (desync resolved)")
         else:
             print("   🔄 Local state cleared (no position)")
-            print()
 
-            # Analyze with LLM (now returns analysis + trade data)
-            print("🧠 Analyzing with ChatGPT...")
-            analysis, trade_data = analyze_with_llm(data)
-            print("✅ Analysis complete\n")
+    # FIXED: Always run LLM analysis after position check (moved outside the else block)
+    print("\n🧠 Analyzing with ChatGPT...")
+    analysis, trade_data = analyze_with_llm(data)
+    print("✅ Analysis complete\n")
 
     # Print trade data for debugging
     if trade_data:
