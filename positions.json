@@ -1,10 +1,10 @@
 {
   "current_position": {
     "status": "short",
-    "entry_price": 4078.0,
-    "entry_time": "2025-10-10T18:50:10.637436",
-    "stop_loss": 4091.0,
-    "take_profit": 4061.0,
+    "entry_price": 4072.5,
+    "entry_time": "2025-10-10T19:03:26.202724",
+    "stop_loss": 4088.5,
+    "take_profit": 4060.0,
     "trade_id": null,
     "action": null,
     "stop_loss_order_id": null,
