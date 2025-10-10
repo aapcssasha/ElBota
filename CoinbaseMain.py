@@ -293,18 +293,134 @@ def execute_real_futures_trade(action, contracts, client):
                 base_size=str(contracts)
             )
 
-        # Extract order details
-        order_id = getattr(order, 'order_id', 'unknown')
-        status = getattr(order, 'status', 'unknown')
+        # Extract order details from response
+        order_dict = order.to_dict() if hasattr(order, 'to_dict') else {}
+        order_id = order_dict.get('order_id', 'unknown')
+        status = order_dict.get('status', 'unknown')
+
+        # Get filled price if available
+        fills = order_dict.get('order_configuration', {}).get('market_market_ioc', {})
 
         result["success"] = True
-        result["message"] = f"{'🟢' if order_side == 'BUY' else '🔴'} {action.replace('_', ' ').upper()} - {contracts} contract(s) | Order ID: {order_id} | Status: {status}"
+        result["order_id"] = order_id
+        result["message"] = f"{'🟢' if order_side == 'BUY' else '🔴'} {action.replace('_', ' ').upper()} - {contracts} contract(s) | Order ID: {order_id[:8]}... | Status: {status}"
 
     except Exception as e:
         result["message"] = f"❌ Trade execution failed: {e}"
         print(f"Error details: {e}")
 
     return result
+
+
+def place_stop_loss_order(client, position_type, contracts, stop_price):
+    """Place a stop-loss order on Coinbase
+
+    Args:
+        client: Coinbase RESTClient
+        position_type: "long" or "short"
+        contracts: Number of contracts
+        stop_price: Stop-loss trigger price
+
+    Returns:
+        dict: Order result with order_id
+    """
+    try:
+        client_order_id = str(uuid.uuid4())
+
+        # For LONG: sell to close when price drops (stop below entry)
+        # For SHORT: buy to close when price rises (stop above entry)
+
+        if position_type == "long":
+            # Stop-loss sells when price goes DOWN
+            order = client.stop_limit_order_gtc_sell(
+                client_order_id=client_order_id,
+                product_id=FUTURES_PRODUCT_ID,
+                base_size=str(contracts),
+                limit_price=str(stop_price - 1),  # Limit slightly below stop
+                stop_price=str(stop_price),
+                stop_direction="STOP_DIRECTION_STOP_DOWN"
+            )
+        else:  # short
+            # Stop-loss buys when price goes UP
+            order = client.stop_limit_order_gtc_buy(
+                client_order_id=client_order_id,
+                product_id=FUTURES_PRODUCT_ID,
+                base_size=str(contracts),
+                limit_price=str(stop_price + 1),  # Limit slightly above stop
+                stop_price=str(stop_price),
+                stop_direction="STOP_DIRECTION_STOP_UP"
+            )
+
+        order_dict = order.to_dict() if hasattr(order, 'to_dict') else {}
+        order_id = order_dict.get('order_id', None)
+
+        return {"success": True, "order_id": order_id, "message": f"✅ Stop-loss order placed at ${stop_price}"}
+
+    except Exception as e:
+        return {"success": False, "order_id": None, "message": f"❌ Stop-loss order failed: {e}"}
+
+
+def place_take_profit_order(client, position_type, contracts, target_price):
+    """Place a take-profit order on Coinbase
+
+    Args:
+        client: Coinbase RESTClient
+        position_type: "long" or "short"
+        contracts: Number of contracts
+        target_price: Take-profit limit price
+
+    Returns:
+        dict: Order result with order_id
+    """
+    try:
+        client_order_id = str(uuid.uuid4())
+
+        # For LONG: sell to close at limit price
+        # For SHORT: buy to close at limit price
+
+        if position_type == "long":
+            # Take-profit sells at limit price
+            order = client.limit_order_gtc_sell(
+                client_order_id=client_order_id,
+                product_id=FUTURES_PRODUCT_ID,
+                base_size=str(contracts),
+                limit_price=str(target_price)
+            )
+        else:  # short
+            # Take-profit buys at limit price
+            order = client.limit_order_gtc_buy(
+                client_order_id=client_order_id,
+                product_id=FUTURES_PRODUCT_ID,
+                base_size=str(contracts),
+                limit_price=str(target_price)
+            )
+
+        order_dict = order.to_dict() if hasattr(order, 'to_dict') else {}
+        order_id = order_dict.get('order_id', None)
+
+        return {"success": True, "order_id": order_id, "message": f"✅ Take-profit order placed at ${target_price}"}
+
+    except Exception as e:
+        return {"success": False, "order_id": None, "message": f"❌ Take-profit order failed: {e}"}
+
+
+def cancel_pending_orders(client, order_ids):
+    """Cancel pending stop-loss and take-profit orders
+
+    Args:
+        client: Coinbase RESTClient
+        order_ids: List of order IDs to cancel
+    """
+    if not order_ids:
+        return
+
+    try:
+        for order_id in order_ids:
+            if order_id:
+                client.cancel_orders(order_ids=[order_id])
+        print(f"   ✅ Cancelled {len([o for o in order_ids if o])} pending orders")
+    except Exception as e:
+        print(f"   ⚠️ Error cancelling orders: {e}")
 
 
 def get_current_futures_position(client):
