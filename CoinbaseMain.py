@@ -303,17 +303,22 @@ def execute_real_futures_trade(action, contracts, client):
                 base_size=str(contracts),
             )
 
-        # FIXED: order is already a dict
-        order_dict = order
-        if order_dict.get("success", False):
-            order_id = order_dict["success_response"].get("order_id", "unknown")
+        # Convert response object to dict
+        order_dict = order.to_dict() if hasattr(order, "to_dict") else {}
 
-            # FIXED: Fetch status separately
+        if order_dict.get("success", False):
+            order_id = order_dict.get("success_response", {}).get("order_id", "unknown")
+
+            # Fetch status separately
             try:
                 status_resp = client.get_order(order_id=order_id)
+                # Convert status response to dict
+                status_resp_dict = (
+                    status_resp.to_dict() if hasattr(status_resp, "to_dict") else {}
+                )
                 status_dict = (
-                    status_resp.get("order", {})
-                    if status_resp.get("success", False)
+                    status_resp_dict.get("order", {})
+                    if status_resp_dict.get("success", False)
                     else {}
                 )
                 status = status_dict.get(
