@@ -11,7 +11,7 @@
     "take_profit_order_id": null,
     "unrealized_pnl": null
   },
-  "last_signal": "sell",
+  "last_signal": "hold",
   "trade_history": [],
   "paper_trading_balance": 2000.0,
   "total_trades": 0,
