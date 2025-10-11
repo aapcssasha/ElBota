@@ -1,22 +1,24 @@
-# BTC Trading Bot - Project Documentation
+# ETH Futures Trading Bot - Project Documentation
 
 **Repository:** https://github.com/aapcssasha/ElBota (Public)
-**Status:** 🧪 **PAPER TRADING ONLY** - Not live on Coinbase, testing with fake money
-**Last Updated:** 2025-10-08
+**Status:** 💰 **LIVE TRADING** - Real money on Coinbase Futures
+**Last Updated:** 2025-10-11
 
 ---
 
 ## 🎯 What This Bot Does
 
-Automated BTC trading bot that:
-1. Fetches BTC/USD 1-minute candles from Coinbase Exchange API (last 60 minutes)
-2. Sends data to ChatGPT (gpt-4o-mini) for technical analysis
-3. Gets trading recommendation (BUY/SELL/HOLD) with entry, stop-loss, and take-profit levels
-4. Executes **paper trades** (simulated, no real money)
-5. Manages positions (tracks opens/closes, checks if stop/target hit)
-6. Generates candlestick charts with trading levels
-7. Sends analysis + chart to Discord webhook
-8. Runs automatically via GitHub Actions every 15 minutes
+Automated ETH futures trading bot that:
+1. Fetches ETH futures 1-minute candles from Coinbase Advanced API (last 120 minutes)
+2. Syncs local state with actual Coinbase position (detects desyncs when stops/targets hit externally)
+3. Sends data to ChatGPT (gpt-4o-mini) for technical analysis
+4. Gets trading recommendation (BUY/SELL/HOLD) with entry, stop-loss, and take-profit levels
+5. Executes **REAL futures trades** on Coinbase (with real money!)
+6. Places stop-loss and take-profit orders automatically
+7. Manages positions (tracks opens/closes, monitors P/L, cancels stale orders)
+8. Generates candlestick charts with trading levels
+9. Sends analysis + chart to Discord webhook
+10. Runs automatically via GitHub Actions every 15 minutes
 
 ---
 
@@ -24,43 +26,52 @@ Automated BTC trading bot that:
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│              TRADING BOT FLOW (Every 15 min)            │
+│          FUTURES TRADING BOT FLOW (Every 15 min)        │
 └─────────────────────────────────────────────────────────┘
 
 1. LOAD STATE
-   └─> positions.json (current position, trade history, balance)
+   └─> positions.json (current position, trade history, stats)
 
-2. FETCH DATA
-   └─> Coinbase API: Last 60 x 1-min BTC/USD candles (OHLCV)
+2. SYNC WITH COINBASE
+   └─> Get actual position from Coinbase API
+   └─> Detect desyncs (position closed externally via stop/target)
+   └─> Calculate realized P/L if desync detected
+   └─> Update local state to match reality
 
-3. CHECK STOP/TARGET
+3. FETCH DATA
+   └─> Coinbase Advanced API: Last 120 x 1-min ETH futures candles (OHLCV)
+
+4. CHECK STOP/TARGET
    └─> Analyze candle highs/lows since entry time
-   └─> If hit: close position, record P/L, update state
+   └─> If hit: close position, cancel pending orders, record P/L
 
-4. GET SIGNAL
+5. GET SIGNAL
    └─> ChatGPT analyzes data
    └─> Returns: action (buy/sell/hold), entry, stop, target, confidence
 
-5. MANAGE POSITION
-   └─> None + BUY → Open Long
-   └─> None + SELL → Open Short
-   └─> Long + BUY → Hold (already in)
+6. MANAGE POSITION
+   └─> Validate trade levels (stop distance, R:R ratio, direction)
+   └─> None + BUY → Open Long + place stop/TP orders
+   └─> None + SELL → Open Short + place stop/TP orders
+   └─> Long + BUY → Hold (update stop/TP if missing)
    └─> Long + SELL → Close Long, Open Short
    └─> Long + HOLD → Close Long
    └─> Short logic (reversed)
 
-6. GENERATE CHART
+7. GENERATE CHART
    └─> Candlestick + volume
    └─> Shows entry/stop/target lines
    └─> Times in Eastern Time (ET)
+   └─> "INVALID TRADE" overlay if validation failed
 
-7. SEND TO DISCORD
+8. SEND TO DISCORD
    └─> Analysis text
    └─> Chart image
    └─> Position updates
-   └─> Paper trading stats
+   └─> Real account balance
+   └─> Trading stats (W/L, Avg W:L, Win Rate)
 
-8. SAVE STATE
+9. SAVE STATE
    └─> positions.json updated
    └─> Auto-committed to GitHub
 ```
@@ -71,8 +82,10 @@ Automated BTC trading bot that:
 
 | File | Purpose |
 |------|---------|
-| `main.py` | Main bot script (all logic) |
-| `positions.json` | State persistence (current position, history, balance) |
+| `CoinbaseMain.py` | **Main bot script** - Live futures trading logic |
+| `main.py` | Old paper trading script (archived, not used) |
+| `coinbase_futures_setup.py` | Helper to test API credentials and find futures products |
+| `positions.json` | State persistence (current position, history, stats) |
 | `.env` | API keys (NEVER commit!) |
 | `requirements.txt` | Python dependencies |
 | `.github/workflows/trading-bot.yml` | GitHub Actions automation |
@@ -86,32 +99,40 @@ Automated BTC trading bot that:
 {
   "current_position": {
     "status": "long|short|none",
-    "entry_price": 122000.00,
-    "entry_time": "2025-10-08T01:30:40.144966",
-    "stop_loss": 121500.00,
-    "take_profit": 122500.00,
-    "trade_id": "paper_1759887040",
-    "action": "buy|sell"
+    "entry_price": 3840.00,
+    "entry_time": "2025-10-11T08:23:10.406861",
+    "stop_loss": 3830.00,
+    "take_profit": 3850.00,
+    "trade_id": null,
+    "action": "buy|sell|null",
+    "stop_loss_order_id": "abc123...",
+    "take_profit_order_id": "def456...",
+    "unrealized_pnl": 5.50
   },
   "last_signal": "buy|sell|hold",
   "trade_history": [
     {
       "type": "long|short",
-      "entry_price": 121500.00,
-      "exit_price": 122000.00,
-      "profit_loss": 500.00,
-      "entry_time": "2025-10-08T00:00:00",
-      "exit_time": "2025-10-08T01:00:00"
+      "entry_price": 3808.0,
+      "exit_price": 3788.5,
+      "profit_loss": 19.5,
+      "entry_time": "2025-10-11T06:48:22.404713",
+      "exit_time": "2025-10-11T07:21:22.833937",
+      "note": "Closed externally (desync detected)"
     }
   ],
-  "paper_trading_balance": 10500.00,
-  "total_trades": 10,
-  "winning_trades": 6,
-  "losing_trades": 4
+  "paper_trading_balance": 2000.0,  // Legacy field, ignored in live mode
+  "total_trades": 16,
+  "winning_trades": 8,
+  "losing_trades": 8
 }
 ```
 
-**Important:** GitHub Actions auto-commits this file every 15 minutes to persist state between runs.
+**Important:**
+- GitHub Actions auto-commits this file every 15 minutes to persist state between runs
+- `stop_loss_order_id` and `take_profit_order_id` track pending orders on Coinbase
+- Many trades have `"note": "Closed externally (desync detected)"` - this means stop/target hit between bot runs
+- `paper_trading_balance` is a legacy field from old paper trading days (now ignored)
 
 ---
 
@@ -119,17 +140,20 @@ Automated BTC trading bot that:
 
 **Runs:** Every 15 minutes (`cron: '*/15 * * * *'`)
 **Platform:** ubuntu-latest with Python 3.13
+**Script:** `CoinbaseMain.py` (live futures trading)
 
 ### Workflow Steps:
 1. Checkout repo
 2. Install dependencies (`requirements.txt`)
-3. Run `main.py` with secrets
+3. Run `CoinbaseMain.py` with secrets
 4. Auto-commit `positions.json` with updated state
-5. Push to GitHub
+5. Push to GitHub (with retry logic and conflict resolution)
 
 ### Required Secrets:
 - `OPENAI_API_KEY` - ChatGPT API
 - `DISCORD_WEBHOOK_URL` - Discord notifications
+- `COINBASE_API_KEY` - Coinbase API key (from CDP portal)
+- `COINBASE_API_SECRET` - Coinbase API secret (private key)
 
 ### Permissions:
 - **"Read and write permissions"** enabled (Settings → Actions → Workflow permissions)
@@ -151,11 +175,11 @@ Automated BTC trading bot that:
 git pull
 
 # 2. Make changes to code
-# Edit main.py, etc.
+# Edit CoinbaseMain.py, etc.
 
-# 3. Test locally (optional)
+# 3. Test locally (optional - BE CAREFUL, this executes real trades!)
 source venv/bin/activate
-python3 main.py
+python3 CoinbaseMain.py
 
 # 4. Commit and push
 git add <files>
@@ -168,9 +192,20 @@ git push
 - If you don't pull, you'll have merge conflicts
 - Always sync before making changes
 
+**Testing Locally:**
+- Running `CoinbaseMain.py` locally will execute REAL trades with REAL money
+- Make sure you understand what changes you're testing
+- Consider testing with a separate test bot or paper trading mode first
+
 ---
 
 ## 📊 Performance Metrics
+
+### Current Stats (as of 2025-10-11)
+- **Total Trades:** 16 (8W / 8L)
+- **Win Rate:** 50%
+- **Avg W:L Ratio:** Being tracked from trade history
+- **Many trades closed externally** - Stops/targets hit between bot runs (this is good!)
 
 ### Average Win/Loss Ratio (Avg W:L)
 
@@ -190,22 +225,43 @@ git push
 
 **Note:** Win rate alone is misleading. You can have 80% win rate but lose money if your few losses are huge.
 
-### Paper Trading Balance
-
-- **Starting:** $10,000 (fake money)
-- **Current:** Updated after every trade
-- **Purpose:** Test strategy before risking real money
-
-**Success Criteria (before going live):**
-- Avg W:L > 2:1
-- Win Rate > 40%
-- 30+ trades completed
-- 30+ days of consistent performance
-- Positive balance growth
-
 ---
 
 ## 🔧 Important Implementation Details
+
+### Futures Trading Configuration
+
+**Product:** `ET-31OCT25-CDE` (ETH Futures, expires Oct 31, 2025)
+**Contract Size:** 0.1 ETH per contract
+**Contracts Per Trade:** 1 (configurable in `CoinbaseMain.py`)
+**Leverage:** Depends on Coinbase account settings (typically 5-10x)
+**Data Timeframe:** 120 minutes of 1-minute candles
+
+**Position Size Example:**
+- 1 contract = 0.1 ETH
+- ETH at $4,000 = $400 notional value per contract
+- With 10x leverage, requires ~$40 margin
+
+### Real Trading Integration
+
+**API:** Coinbase Advanced Trade API via `coinbase-advanced-py` SDK
+**Order Types:**
+- **Market orders** for entry (immediate fill)
+- **Stop-limit orders** for stop-loss (trigger + limit)
+- **Limit orders** for take-profit
+
+**Order Management:**
+- Bot places stop-loss and take-profit orders immediately after opening position
+- Order IDs stored in positions.json
+- Orders automatically cancelled when position closes
+- Stale orders cancelled before new trades
+
+**Position Desync Detection:**
+- Bot checks actual Coinbase position every run
+- If local state says "long" but API says "none", position closed externally
+- Bot calculates realized P/L from filled order prices
+- Records trade with note "Closed externally (desync detected)"
+- This catches stops/targets hit between 15-minute runs
 
 ### Stop-Loss and Take-Profit Detection
 
@@ -217,9 +273,12 @@ git push
 - **Order matters:** Checks target first, then stop, in chronological order by candle
 - **Why:** Catches targets/stops hit between 15-minute runs and respects price action order
 
-**Example:** Entered long at $122,000 with target $122,200. If any candle between entry and now had high ≥ $122,200, target is hit (even if current price is $122,100).
+**Example:** Entered long at $4,000 with target $4,020. If any candle between entry and now had high ≥ $4,020, target is hit (even if current price is $4,010).
 
-**Recent fix:** Updated to check chronologically (candle by candle) rather than checking all highs then all lows. This ensures if both target and stop are hit in the same candle, the one that would have been hit first based on price movement is recorded.
+**Integration with Real Orders:**
+- Candle-based detection is a backup check
+- Real stop/TP orders execute immediately on Coinbase when triggered
+- Desync detection catches these fills and syncs local state
 
 ### Chart Timezone
 
@@ -230,7 +289,7 @@ git push
 ### ChatGPT Prompt Strategy
 
 - **Model:** gpt-4o-mini (cheap, fast)
-- **Context:** 60 minutes of 1-min candles (OHLCV data)
+- **Context:** 120 minutes of 1-min candles (OHLCV data)
 - **Focus:** SHORT-TERM SCALPING with strong technical levels
 - **Output:** Dual format
   1. Human-readable analysis (for Discord)
@@ -238,34 +297,27 @@ git push
 
 **Trading Framework:**
 
-1. **Strong Support/Resistance Zones**
-   - Levels tested 2+ times
-   - Price consolidation areas
-   - High volume zones
-   - These become stop-loss and take-profit targets
+1. **Trend Following with Pullback Entries** (PRIMARY)
+   - Identify clear trend: higher highs/lows (uptrend) OR lower highs/lows (downtrend)
+   - Enter on pullbacks/bounces: 20-80% retracement of previous swing
 
-2. **False Breakout Detection** (High priority)
+2. **False Breakout Reversal** (SECONDARY)
    - Price breaks strong level then quickly reverses (3-5 candles)
    - Trade the reversal direction
-   - Example: Break above resistance → drops back → SELL signal
 
-3. **Wave Trading / Trend Following** (Preferred for trends)
-   - Identify market waves (higher highs/lows or lower highs/lows)
-   - Enter on 50% retracements of previous swing
-   - Uptrend: Buy on pullbacks
-   - Downtrend: Sell on bounces
+3. **Significant Support/Resistance Zones** (FALLBACK)
+   - Levels tested 2+ times with price consolidation
+   - High volume zones
+   - Clear pivot points
 
-4. **Stop-Loss Placement** (Primary step)
-   - After determining direction, find the STRONGEST pivot from FULL 60-minute data
-   - Look through ALL 60 candles, not just last 5-10 candles
-   - For LONG: Most significant swing low or support (tested 2+ times, clear structure)
-   - For SHORT: Most significant swing high or resistance (tested 2+ times, clear structure)
+4. **Stop-Loss Placement** (CRITICAL)
+   - Find STRONGEST pivot from FULL 120-minute data
+   - For LONG: Most significant swing low or support
+   - For SHORT: Most significant swing high or resistance
    - Place stop 5-20 dollars beyond this pivot
    - **Stop Distance Constraints:**
-     - Minimum: $80 (prevents overly tight stops)
-     - Maximum: $500 (keeps stops reasonable)
-     - If nearest pivot is <$80 away, find next major pivot
-     - If all pivots >$500 away, use "hold"
+     - Minimum: 0.10% from entry (prevents overly tight stops)
+     - Maximum: 0.50% from entry (keeps stops reasonable)
 
 5. **Target Calculation** (Market structure FIRST, ratio check SECOND)
    - **PRIORITY:** Find best target based on market structure
@@ -275,9 +327,6 @@ git push
      - Minimum: 0.5:1 (risk $400 to make $200) - aka 1:2 ratio
      - Maximum: 3:1 (risk $200 to make $600)
    - Any ratio between 0.5:1 and 3:1 is acceptable
-   - Examples: 0.65:1, 1.2:1, 2.5:1, 2.8:1, etc.
-   - These are just boundaries to prevent extreme trades
-   - If no significant level exists within ratio range → use "hold"
 
 ### Trade Level Validation
 
@@ -288,27 +337,27 @@ Before executing any trade, the bot validates ALL of these criteria:
    - For SHORT trades: take_profit < entry_price < stop_loss
 
 2. **Stop Distance Constraints:**
-   - Minimum: $80 (prevents overly tight stops)
-   - Maximum: $500 (keeps stops reasonable)
-   - Example rejection: Stop $2 away → "Stop too tight: $2.13 (minimum $80)"
+   - Minimum: 0.10% from entry
+   - Maximum: 0.50% from entry
+   - Example rejection: Stop 0.05% away → "Stop too tight: 0.05% (minimum 0.10%)"
 
-3. **Risk-Reward Ratio:**
+3. **Target Distance Constraints:**
+   - Minimum: 0.10% from entry
+   - Maximum: 0.50% from entry
+
+4. **Risk-Reward Ratio:**
    - Minimum: 0.5:1 (risk $400 to make $200) - aka 1:2 ratio
    - Maximum: 3:1 (risk $200 to make $600)
    - Any ratio in range is valid: 0.65:1, 1.2:1, 2.5:1, etc.
-   - These are boundaries to prevent extreme trades, NOT targets
-   - Very flexible range allows natural market-based targets
    - Example rejection: 0.3:1 ratio → "Risk-reward too low: 0.30:1 (minimum 0.5:1)"
-   - Example rejection: 4.5:1 ratio → "Risk-reward too high: 4.50:1 (maximum 3:1)"
 
 If ANY validation fails:
 - Trade is rejected and not executed
 - Error message appears in Discord
 - Discord shows "⚠️ Trade Rejected" warning
-- **Chart displays "INVALID TRADE" text** (red box at top-right)
+- **Chart displays "INVALID TRADE" text** (red box overlay)
 - Bot prevents bad trades even if ChatGPT generates them
 - **If in opposite position:** Closes existing position but doesn't open new invalid trade
-  - Example: SHORT position → invalid BUY signal → Closes SHORT, ends with no position
 
 ### Position Management Logic
 
@@ -316,93 +365,92 @@ State machine prevents duplicates and handles direction changes:
 
 | Current Status | New Signal | Validation | Action |
 |----------------|------------|------------|--------|
-| None | BUY | Valid | Open Long |
+| None | BUY | Valid | Open Long + place stop/TP orders |
 | None | BUY | Invalid | Do nothing (show error) |
-| None | SELL | Valid | Open Short |
+| None | SELL | Valid | Open Short + place stop/TP orders |
 | None | SELL | Invalid | Do nothing (show error) |
 | None | HOLD | N/A | Do nothing |
-| Long | BUY | N/A | Hold (already in) |
-| Long | SELL | Valid | Close Long → Open Short |
+| Long | BUY | N/A | Hold (place missing stop/TP if needed) |
+| Long | SELL | Valid | Close Long → Cancel orders → Open Short |
 | Long | SELL | Invalid | Close Long → No position |
-| Long | HOLD | N/A | Close Long |
-| Short | SELL | N/A | Hold (already in) |
-| Short | BUY | Valid | Close Short → Open Long |
+| Long | HOLD | N/A | Close Long → Cancel orders |
+| Short | SELL | N/A | Hold (place missing stop/TP if needed) |
+| Short | BUY | Valid | Close Short → Cancel orders → Open Long |
 | Short | BUY | Invalid | Close Short → No position |
-| Short | HOLD | N/A | Close Short |
+| Short | HOLD | N/A | Close Short → Cancel orders |
 
-**Key behavior:** When signal direction changes but validation fails:
-- Bot closes existing opposite position (respects direction change)
-- Bot doesn't open invalid new position (protects capital)
-- Result: Flat/no position until next valid signal
+**Key behavior:**
+- Bot automatically places stop-loss and take-profit orders after opening position
+- If holding and orders are missing (desync), bot re-places them
+- When closing position, bot cancels all pending orders
+- All stale orders cancelled before opening new position
 
 ---
 
-## 🚨 Current Status & Next Steps
+## 🚨 Current Status
 
-### ✅ Completed
-- [x] Data fetching from Coinbase
-- [x] ChatGPT integration
-- [x] Chart generation with trading levels
-- [x] Discord notifications
-- [x] Paper trading system
-- [x] Position management
-- [x] Stop/target detection (candle-based)
+### ✅ Live Trading
+- **Status:** Bot is actively trading with real money on Coinbase
+- **Product:** ET-31OCT25-CDE (ETH Futures)
+- **Automation:** GitHub Actions runs every 15 minutes
+- **Trading Stats:** 16 trades (8W/8L, 50% win rate)
+
+### 🎯 What's Working
+- [x] Real Coinbase API integration
+- [x] Market order execution (entries)
+- [x] Stop-loss and take-profit order placement
+- [x] Position desync detection
+- [x] Order cancellation management
+- [x] Real-time balance tracking
+- [x] ChatGPT analysis integration
+- [x] Discord notifications with charts
 - [x] GitHub Actions automation
+- [x] Trade level validation
 - [x] Performance metrics tracking
-- [x] Trade level validation (prevents inverted stops/targets)
 
-### 🧪 In Progress - Paper Trading Results
-**Current Stats (as of 2025-10-08):**
-- ✅ **42 trades** completed (exceeds 30+ goal)
-- ✅ **59.5% win rate** (25W/17L) - exceeds 40% goal
-- ✅ **$10,901.69 balance** (+$901.69 profit, +9.02% gain)
-- ⏳ **Avg W:L ratio:** Being calculated from trade history
-- ⏳ **Running time:** Need 30+ days of consistent performance
-
-**Status:** Strategy is performing well. Need more time to validate consistency before going live.
-
-### 🚀 Future (After Successful Backtesting)
-- [ ] **Go live on Coinbase** - Start with small amounts ($50-100)
-- [ ] **Real money trading** - Only if paper trading proves consistently profitable
+### 🐛 Known Issues
+- `positions.json` still has `paper_trading_balance` field (legacy, ignored)
+- `main.py` is outdated (old paper trading version, not used)
 
 ---
 
 ## 📌 Important Notes
 
-### Paper Trading vs Live Trading
+### Live Trading - Real Money
 
-**Current:** 100% paper trading (fake money, no real trades on Coinbase)
+**Current:** 100% live trading with real money on Coinbase Futures
 
 **How it works:**
-- Simulates trades based on ChatGPT signals
-- Tracks positions in `positions.json`
-- Calculates profit/loss as if trades were real
-- No actual API calls to Coinbase trading endpoints
-- No real money at risk
+- Executes real market orders via Coinbase Advanced API
+- Places real stop-loss and take-profit orders
+- Tracks actual positions on Coinbase
+- Calculates profit/loss from actual fills
+- Real money at risk
 
-**When to go live:**
-- After 30+ days of profitable paper trading
-- Avg W:L ratio consistently > 2:1
-- Win rate > 40%
-- Understand all edge cases and risks
+**Risk Management:**
+- Start with small position sizes (1 contract = 0.1 ETH)
+- Bot validates all trades before execution
+- Stop-loss orders always placed immediately
+- Position size configurable in `CoinbaseMain.py`
 
 ### Data Source
 
-- **Exchange:** Coinbase Exchange API (free, public endpoint)
-- **Pair:** BTC-USD
+- **Exchange:** Coinbase Advanced Trade API
+- **Product:** ET-31OCT25-CDE (ETH Futures)
 - **Timeframe:** 1-minute candles
-- **Amount:** Last 60 candles (1 hour of data)
-- **Delay:** ~20 seconds (nearly real-time)
+- **Amount:** Last 120 candles (2 hours of data)
+- **Delay:** ~5-10 seconds (near real-time)
 
 ### Cost Breakdown
 
-- **Data:** $0 (Coinbase public API is free)
+- **Data:** $0 (Coinbase Advanced API is free for market data)
 - **Charts:** $0 (local generation with matplotlib)
 - **ChatGPT:** ~$0.00015 per run (gpt-4o-mini)
 - **Discord:** $0 (webhooks are free)
 - **GitHub Actions:** $0 (public repo = unlimited minutes)
+- **Trading Fees:** Coinbase futures trading fees (varies by volume tier)
 
-**Total cost:** ~$0.01 per day (96 runs × $0.00015)
+**Total operational cost:** ~$0.01 per day (96 runs × $0.00015)
 
 ### Dependencies
 
@@ -415,6 +463,7 @@ matplotlib==3.10.6
 mplfinance==0.12.10b0
 python-dateutil==2.9.0
 pytz==2024.1
+coinbase-advanced-py>=1.2.0
 ```
 
 ---
@@ -426,7 +475,15 @@ pytz==2024.1
 ```bash
 OPENAI_API_KEY="sk-..."
 DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/..."
+COINBASE_API_KEY="organizations/..."
+COINBASE_API_SECRET="-----BEGIN EC PRIVATE KEY-----\n...\n-----END EC PRIVATE KEY-----\n"
 ```
+
+**API Key Setup:**
+1. Create API keys at: https://portal.cdp.coinbase.com/access/api
+2. Enable "Trade" and "View" permissions
+3. Copy the FULL private key (including BEGIN/END lines)
+4. Store in `.env` file
 
 ### .gitignore
 
@@ -440,15 +497,24 @@ All API keys stored as GitHub Secrets (not visible in repo or logs).
 
 ## ⚠️ Trading Disclaimer
 
-**This software is for educational purposes only.**
+**This software involves real financial risk.**
 
-- Cryptocurrency trading carries significant risk
+- Cryptocurrency futures trading carries significant risk of loss
+- You can lose more than your initial investment (leverage amplifies losses)
 - Past performance does not guarantee future results
-- Only trade with money you can afford to lose
-- Currently in paper trading phase (no real money)
-- Not financial advice
+- Only trade with money you can afford to lose completely
+- Currently trading live with real money on Coinbase
+- Not financial advice - use at your own risk
+- The bot executes trades automatically without human intervention
+- Stop-loss orders may not prevent all losses (slippage, gap moves, etc.)
+
+**By running this bot, you acknowledge:**
+- You understand the risks of automated futures trading
+- You are responsible for all trading decisions and outcomes
+- The developers are not liable for any losses
+- You have tested and understand how the bot works
 
 ---
 
 **Maintained By:** Alejandro + Claude Code
-**Version:** 3.0 (Paper Trading + GitHub Actions Deployed)
+**Version:** 4.0 (Live ETH Futures Trading + GitHub Actions)
