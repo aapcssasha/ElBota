@@ -269,7 +269,12 @@ def place_stop_loss_order(client, position_type, contracts, stop_price):
             )
 
         order_dict = order.to_dict() if hasattr(order, "to_dict") else {}
-        order_id = order_dict.get("order_id", None)
+
+        # Extract order_id from nested success_response (same as market orders)
+        if order_dict.get("success", False):
+            order_id = order_dict.get("success_response", {}).get("order_id", None)
+        else:
+            order_id = None
 
         return {
             "success": True,
@@ -323,7 +328,12 @@ def place_take_profit_order(client, position_type, contracts, target_price):
             )
 
         order_dict = order.to_dict() if hasattr(order, "to_dict") else {}
-        order_id = order_dict.get("order_id", None)
+
+        # Extract order_id from nested success_response (same as market orders)
+        if order_dict.get("success", False):
+            order_id = order_dict.get("success_response", {}).get("order_id", None)
+        else:
+            order_id = None
 
         return {
             "success": True,
@@ -371,7 +381,15 @@ def get_open_order_ids(client):
             if isinstance(open_orders_resp, dict)
             else []
         )
-        order_ids = [order.get("order_id") for order in orders if order.get("order_id")]
+        # Handle both dict and object types
+        order_ids = []
+        for order in orders:
+            if isinstance(order, dict):
+                order_id = order.get("order_id")
+            else:
+                order_id = getattr(order, "order_id", None)
+            if order_id:
+                order_ids.append(order_id)
         return order_ids
     except Exception as e:
         print(f"   ⚠️ Error listing open orders: {e}")
@@ -1587,8 +1605,17 @@ if __name__ == "__main__":
     current_price = float(latest_candle[4])
     print(f"💵 Current {CRYPTO_SYMBOL} Futures Price: ${current_price:,.2f}\n")
 
+    # CRITICAL: Cancel any orphaned orders from previous runs FIRST
+    print("🔍 Checking for orphaned orders...")
+    orphaned_orders = get_open_order_ids(client)
+    if orphaned_orders:
+        print(f"   ⚠️ Found {len(orphaned_orders)} orphaned orders, cancelling...")
+        cancel_pending_orders(client, orphaned_orders)
+    else:
+        print("   ✅ No orphaned orders found")
+
     # If real trading, get actual position from Coinbase and sync state
-    print("📊 Checking actual futures position on Coinbase...")
+    print("\n📊 Checking actual futures position on Coinbase...")
     real_position = get_current_futures_position(client)
 
     trade_results = []  # Initialize here to collect desync if any
