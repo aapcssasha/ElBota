@@ -1605,16 +1605,7 @@ if __name__ == "__main__":
     current_price = float(latest_candle[4])
     print(f"💵 Current {CRYPTO_SYMBOL} Futures Price: ${current_price:,.2f}\n")
 
-    # CRITICAL: Cancel any orphaned orders from previous runs FIRST
-    print("🔍 Checking for orphaned orders...")
-    orphaned_orders = get_open_order_ids(client)
-    if orphaned_orders:
-        print(f"   ⚠️ Found {len(orphaned_orders)} orphaned orders, cancelling...")
-        cancel_pending_orders(client, orphaned_orders)
-    else:
-        print("   ✅ No orphaned orders found")
-
-    # If real trading, get actual position from Coinbase and sync state
+    # Get actual position from Coinbase and sync state
     print("\n📊 Checking actual futures position on Coinbase...")
     real_position = get_current_futures_position(client)
 
