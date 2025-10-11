@@ -1,8 +1,8 @@
 {
   "current_position": {
     "status": "short",
-    "entry_price": 3842.0,
-    "entry_time": "2025-10-11T11:35:07.139064",
+    "entry_price": 3852.0,
+    "entry_time": "2025-10-11T11:40:06.502802",
     "stop_loss": 3848.0,
     "take_profit": 3825.5,
     "trade_id": null,
@@ -11,7 +11,7 @@
     "take_profit_order_id": null,
     "unrealized_pnl": 0.0
   },
-  "last_signal": "sell",
+  "last_signal": "hold",
   "trade_history": [
     {
       "type": "long",
