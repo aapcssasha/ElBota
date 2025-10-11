@@ -332,7 +332,7 @@ def place_take_profit_order(client, position_type, contracts, target_price):
 
 
 def cancel_pending_orders(client, order_ids):
-    """Cancel pending stop-loss and take-profit orders
+    """Cancel specific pending orders
 
     Args:
         client: Coinbase RESTClient
@@ -342,21 +342,42 @@ def cancel_pending_orders(client, order_ids):
         return
 
     try:
-        for order_id in order_ids:
-            if order_id:
-                client.cancel_orders(order_ids=[order_id])
+        client.cancel_orders(order_ids=order_ids)
         print(f"   ✅ Cancelled {len([o for o in order_ids if o])} pending orders")
     except Exception as e:
         print(f"   ⚠️ Error cancelling orders: {e}")
 
 
+def get_open_order_ids(client):
+    """Get list of open order IDs for the futures product"""
+    try:
+        open_orders_resp = client.list_orders(
+            product_id=FUTURES_PRODUCT_ID, order_status=["OPEN"]
+        )
+        # Extract orders list
+        orders = (
+            getattr(open_orders_resp, "orders", [])
+            if hasattr(open_orders_resp, "orders")
+            else open_orders_resp.get("orders", [])
+            if isinstance(open_orders_resp, dict)
+            else []
+        )
+        order_ids = [order.get("order_id") for order in orders if order.get("order_id")]
+        return order_ids
+    except Exception as e:
+        print(f"   ⚠️ Error listing open orders: {e}")
+        return []
+
+
 def cancel_all_open_orders(client):
     """Cancel all open orders for the futures product"""
-    try:
-        client.cancel_all(product_id=FUTURES_PRODUCT_ID)
-        print("   ✅ Cancelled all open orders for product")
-    except Exception as e:
-        print(f"   ⚠️ Error cancelling all orders: {e}")
+    order_ids = get_open_order_ids(client)
+    if order_ids:
+        try:
+            client.cancel_orders(order_ids=order_ids)
+            print(f"   ✅ Cancelled {len(order_ids)} open orders")
+        except Exception as e:
+            print(f"   ⚠️ Error cancelling orders: {e}")
 
 
 def get_current_futures_position(client):
@@ -1570,34 +1591,79 @@ if __name__ == "__main__":
             print(
                 "   ⚠️ API shows no position, but local has one. Assuming closed externally (e.g., stop hit)."
             )
-            # Cancel any lingering orders
+            # Detect which order was filled for accurate exit price and P/L
             stop_order_id = positions_data["current_position"].get("stop_loss_order_id")
             tp_order_id = positions_data["current_position"].get("take_profit_order_id")
+
+            exit_price = current_price  # Fallback
+            reason = "externally"
+            filled_price = None
+
+            # Check stop order
+            if stop_order_id:
+                try:
+                    stop_order_resp = client.get_order(stop_order_id)
+                    stop_dict = (
+                        stop_order_resp.to_dict()
+                        if hasattr(stop_order_resp, "to_dict")
+                        else {}
+                    )
+                    order_info = stop_dict.get("order", {})
+                    if order_info.get("status") == "FILLED":
+                        filled_price = float(
+                            order_info.get("average_filled_price", current_price)
+                        )
+                        exit_price = filled_price
+                        reason = "stop_hit"
+                except Exception as e:
+                    print(f"Warning: Could not fetch stop order status: {e}")
+
+            # Check TP order
+            if tp_order_id and filled_price is None:  # If stop not filled
+                try:
+                    tp_order_resp = client.get_order(tp_order_id)
+                    tp_dict = (
+                        tp_order_resp.to_dict()
+                        if hasattr(tp_order_resp, "to_dict")
+                        else {}
+                    )
+                    order_info = tp_dict.get("order", {})
+                    if order_info.get("status") == "FILLED":
+                        filled_price = float(
+                            order_info.get("average_filled_price", current_price)
+                        )
+                        exit_price = filled_price
+                        reason = "target_hit"
+                except Exception as e:
+                    print(f"Warning: Could not fetch TP order status: {e}")
+
+            # Cancel any lingering orders
             order_ids = [oid for oid in [stop_order_id, tp_order_id] if oid]
             if order_ids:
                 print(f"   🚫 Cancelling {len(order_ids)} lingering orders...")
                 cancel_pending_orders(client, order_ids)
-            # FIXED: Add closure to history with estimated P/L (in USD)
+
+            # Calculate P/L
             entry = positions_data["current_position"]["entry_price"]
             multiplier = CONTRACTS_PER_TRADE * CONTRACT_MULTIPLIER
             if entry is not None:
                 if positions_data["current_position"]["status"] == "long":
-                    profit_loss = (current_price - entry) * multiplier
+                    profit_loss = (exit_price - entry) * multiplier
                     trade_type = "long"
                     emoji = "✅" if profit_loss > 0 else "❌"
                 else:
-                    profit_loss = (entry - current_price) * multiplier
+                    profit_loss = (entry - exit_price) * multiplier
                     trade_type = "short"
                     emoji = "✅" if profit_loss > 0 else "❌"
                 positions_data["trade_history"].append(
                     {
                         "type": trade_type,
                         "entry_price": entry,
-                        "exit_price": current_price,  # Approximate with current
+                        "exit_price": exit_price,
                         "profit_loss": profit_loss,
                         "entry_time": positions_data["current_position"]["entry_time"],
                         "exit_time": datetime.now().isoformat(),
-                        "note": "Closed externally (desync detected)",
+                        "note": f"Closed {reason} (desync detected)",
                     }
                 )
                 positions_data["total_trades"] += 1
@@ -1610,7 +1676,7 @@ if __name__ == "__main__":
                 trade_results.append(
                     {
                         "success": True,
-                        "message": f"{emoji} Desync: Position closed externally at ~${current_price:,.2f} | P/L: ${profit_loss:+,.2f}",
+                        "message": f"{emoji} Desync: Position closed {reason} at ${exit_price:,.2f} | P/L: ${profit_loss:+,.2f}",
                     }
                 )
         else:
