@@ -25,9 +25,6 @@ TIMEFRAME_MINUTES = 120  # How many minutes of data to fetch
 CONTRACTS_PER_TRADE = 1  # Number of contracts to trade (0.1 ETH each)
 CONTRACT_MULTIPLIER = 0.1  # 0.1 ETH per contract for nano ETH futures
 
-# Trading mode
-PAPER_TRADING = False  # ⚠️ SET TO True FOR TESTING, False FOR REAL TRADING
-
 # Derived values
 CRYPTO_LOWER = CRYPTO_SYMBOL.lower()
 
@@ -58,7 +55,6 @@ def load_positions():
             },
             "last_signal": "hold",
             "trade_history": [],
-            "paper_trading_balance": 2000.0,
             "total_trades": 0,
             "winning_trades": 0,
             "losing_trades": 0,
@@ -132,141 +128,6 @@ def check_stop_target(positions_data, csv_data):
                 return True, "stop_hit", pos["stop_loss"]
 
     return False, None, None
-
-
-def execute_paper_trade(
-    action, price, positions_data, stop_loss=None, take_profit=None
-):
-    """Execute a paper trade (simulate, no real money)
-
-    Returns:
-        dict: Trade result with details
-    """
-    result = {"success": False, "message": "", "profit_loss": 0}
-
-    if action == "open_long":
-        positions_data["current_position"] = {
-            "status": "long",
-            "entry_price": price,
-            "entry_time": datetime.now().isoformat(),
-            "stop_loss": stop_loss,
-            "take_profit": take_profit,
-            "trade_id": f"paper_{int(datetime.now().timestamp())}",
-            "action": "buy",
-            "stop_loss_order_id": None,
-            "take_profit_order_id": None,
-            "unrealized_pnl": None,
-        }
-        result["success"] = True
-        result["message"] = f"🟢 OPENED LONG at ${price:,.2f}"
-
-    elif action == "open_short":
-        positions_data["current_position"] = {
-            "status": "short",
-            "entry_price": price,
-            "entry_time": datetime.now().isoformat(),
-            "stop_loss": stop_loss,
-            "take_profit": take_profit,
-            "trade_id": f"paper_{int(datetime.now().timestamp())}",
-            "action": "sell",
-            "stop_loss_order_id": None,
-            "take_profit_order_id": None,
-            "unrealized_pnl": None,
-        }
-        result["success"] = True
-        result["message"] = f"🔴 OPENED SHORT at ${price:,.2f}"
-
-    elif action == "close_long":
-        entry_price = positions_data["current_position"]["entry_price"]
-        profit_loss = price - entry_price
-        positions_data["paper_trading_balance"] += profit_loss
-        positions_data["total_trades"] += 1
-
-        if profit_loss > 0:
-            positions_data["winning_trades"] += 1
-            emoji = "✅"
-        else:
-            positions_data["losing_trades"] += 1
-            emoji = "❌"
-
-        # Add to history
-        positions_data["trade_history"].append(
-            {
-                "type": "long",
-                "entry_price": entry_price,
-                "exit_price": price,
-                "profit_loss": profit_loss,
-                "entry_time": positions_data["current_position"]["entry_time"],
-                "exit_time": datetime.now().isoformat(),
-            }
-        )
-
-        # Reset position
-        positions_data["current_position"] = {
-            "status": "none",
-            "entry_price": None,
-            "entry_time": None,
-            "stop_loss": None,
-            "take_profit": None,
-            "trade_id": None,
-            "action": None,
-            "stop_loss_order_id": None,
-            "take_profit_order_id": None,
-            "unrealized_pnl": None,
-        }
-
-        result["success"] = True
-        result["profit_loss"] = profit_loss
-        result["message"] = (
-            f"{emoji} CLOSED LONG at ${price:,.2f} | P/L: ${profit_loss:+,.2f}"
-        )
-
-    elif action == "close_short":
-        entry_price = positions_data["current_position"]["entry_price"]
-        profit_loss = entry_price - price  # Reversed for shorts
-        positions_data["paper_trading_balance"] += profit_loss
-        positions_data["total_trades"] += 1
-
-        if profit_loss > 0:
-            positions_data["winning_trades"] += 1
-            emoji = "✅"
-        else:
-            positions_data["losing_trades"] += 1
-            emoji = "❌"
-
-        # Add to history
-        positions_data["trade_history"].append(
-            {
-                "type": "short",
-                "entry_price": entry_price,
-                "exit_price": price,
-                "profit_loss": profit_loss,
-                "entry_time": positions_data["current_position"]["entry_time"],
-                "exit_time": datetime.now().isoformat(),
-            }
-        )
-
-        # Reset position
-        positions_data["current_position"] = {
-            "status": "none",
-            "entry_price": None,
-            "entry_time": None,
-            "stop_loss": None,
-            "take_profit": None,
-            "trade_id": None,
-            "action": None,
-            "stop_loss_order_id": None,
-            "take_profit_order_id": None,
-            "unrealized_pnl": None,
-        }
-
-        result["success"] = True
-        result["profit_loss"] = profit_loss
-        result["message"] = (
-            f"{emoji} CLOSED SHORT at ${price:,.2f} | P/L: ${profit_loss:+,.2f}"
-        )
-
-    return result
 
 
 def execute_real_futures_trade(action, contracts, client):
@@ -368,6 +229,11 @@ def place_stop_loss_order(client, position_type, contracts, stop_price):
     """
     try:
         client_order_id = str(uuid.uuid4())
+        stop_price_rounded = int(round(stop_price))
+        if position_type == "long":
+            limit_price_rounded = stop_price_rounded - 1
+        else:
+            limit_price_rounded = stop_price_rounded + 1
 
         # For LONG: sell to close when price drops (stop below entry)
         # For SHORT: buy to close when price rises (stop above entry)
@@ -378,8 +244,8 @@ def place_stop_loss_order(client, position_type, contracts, stop_price):
                 client_order_id=client_order_id,
                 product_id=FUTURES_PRODUCT_ID,
                 base_size=str(contracts),
-                limit_price=str(stop_price - 1),  # Limit slightly below stop
-                stop_price=str(stop_price),
+                limit_price=str(limit_price_rounded),  # Limit slightly below stop
+                stop_price=str(stop_price_rounded),
                 stop_direction="STOP_DIRECTION_STOP_DOWN",
             )
         else:  # short
@@ -388,8 +254,8 @@ def place_stop_loss_order(client, position_type, contracts, stop_price):
                 client_order_id=client_order_id,
                 product_id=FUTURES_PRODUCT_ID,
                 base_size=str(contracts),
-                limit_price=str(stop_price + 1),  # Limit slightly above stop
-                stop_price=str(stop_price),
+                limit_price=str(limit_price_rounded),  # Limit slightly above stop
+                stop_price=str(stop_price_rounded),
                 stop_direction="STOP_DIRECTION_STOP_UP",
             )
 
@@ -399,7 +265,7 @@ def place_stop_loss_order(client, position_type, contracts, stop_price):
         return {
             "success": True,
             "order_id": order_id,
-            "message": f"✅ Stop-loss order placed at ${stop_price}",
+            "message": f"✅ Stop-loss order placed at ${stop_price_rounded}",
         }
 
     except Exception as e:
@@ -425,6 +291,7 @@ def place_take_profit_order(client, position_type, contracts, target_price):
     """
     try:
         client_order_id = str(uuid.uuid4())
+        target_price_rounded = int(round(target_price))
 
         # For LONG: sell to close at limit price
         # For SHORT: buy to close at limit price
@@ -435,7 +302,7 @@ def place_take_profit_order(client, position_type, contracts, target_price):
                 client_order_id=client_order_id,
                 product_id=FUTURES_PRODUCT_ID,
                 base_size=str(contracts),
-                limit_price=str(target_price),
+                limit_price=str(target_price_rounded),
             )
         else:  # short
             # Take-profit buys at limit price
@@ -443,7 +310,7 @@ def place_take_profit_order(client, position_type, contracts, target_price):
                 client_order_id=client_order_id,
                 product_id=FUTURES_PRODUCT_ID,
                 base_size=str(contracts),
-                limit_price=str(target_price),
+                limit_price=str(target_price_rounded),
             )
 
         order_dict = order.to_dict() if hasattr(order, "to_dict") else {}
@@ -452,7 +319,7 @@ def place_take_profit_order(client, position_type, contracts, target_price):
         return {
             "success": True,
             "order_id": order_id,
-            "message": f"✅ Take-profit order placed at ${target_price}",
+            "message": f"✅ Take-profit order placed at ${target_price_rounded}",
         }
 
     except Exception as e:
@@ -481,6 +348,15 @@ def cancel_pending_orders(client, order_ids):
         print(f"   ✅ Cancelled {len([o for o in order_ids if o])} pending orders")
     except Exception as e:
         print(f"   ⚠️ Error cancelling orders: {e}")
+
+
+def cancel_all_open_orders(client):
+    """Cancel all open orders for the futures product"""
+    try:
+        client.cancel_all(product_id=FUTURES_PRODUCT_ID)
+        print("   ✅ Cancelled all open orders for product")
+    except Exception as e:
+        print(f"   ⚠️ Error cancelling all orders: {e}")
 
 
 def get_current_futures_position(client):
@@ -538,126 +414,127 @@ def get_current_futures_position(client):
 def execute_trade(
     action, price, positions_data, stop_loss=None, take_profit=None, client=None
 ):
-    """Execute trade - either paper or real based on PAPER_TRADING flag
+    """Execute trade - real trading only
 
     Args:
         action: Trade action (open_long, close_long, etc.)
-        price: Execution price (for paper trading)
-        positions_data: Position data (for paper trading)
+        price: Execution price (approximate for P/L calc)
+        positions_data: Position state data
         stop_loss: Stop loss level
         take_profit: Take profit level
-        client: Coinbase client (for real trading)
+        client: Coinbase client (required)
 
     Returns:
         dict: Trade result
     """
-    if PAPER_TRADING or client is None:
-        # Paper trading
-        return execute_paper_trade(
-            action, price, positions_data, stop_loss, take_profit
+    # Real trading - execute market order first
+    result = execute_real_futures_trade(action, CONTRACTS_PER_TRADE, client)
+
+    # ✅ NEW: Place stop-loss and take-profit orders after opening position
+    if result.get("success") and action in ["open_long", "open_short"]:
+        position_type = "long" if action == "open_long" else "short"
+
+        # Place stop-loss order
+        if stop_loss:
+            print(f"   📍 Placing stop-loss order at ${stop_loss:,.2f}...")
+            stop_result = place_stop_loss_order(
+                client, position_type, CONTRACTS_PER_TRADE, stop_loss
+            )
+            result["message"] += f"\n   {stop_result['message']}"
+
+            # Store stop-loss order ID in positions data
+            if stop_result.get("success"):
+                positions_data["current_position"]["stop_loss"] = stop_loss
+                positions_data["current_position"]["stop_loss_order_id"] = (
+                    stop_result.get("order_id")
+                )
+
+        # Place take-profit order
+        if take_profit:
+            print(f"   🎯 Placing take-profit order at ${take_profit:,.2f}...")
+            tp_result = place_take_profit_order(
+                client, position_type, CONTRACTS_PER_TRADE, take_profit
+            )
+            result["message"] += f"\n   {tp_result['message']}"
+
+            # Store take-profit order ID in positions data
+            if tp_result.get("success"):
+                positions_data["current_position"]["take_profit"] = take_profit
+                positions_data["current_position"]["take_profit_order_id"] = (
+                    tp_result.get("order_id")
+                )
+
+        # Update positions data with entry info
+        positions_data["current_position"]["status"] = position_type
+        positions_data["current_position"]["entry_price"] = price
+        positions_data["current_position"]["entry_time"] = datetime.now().isoformat()
+        positions_data["current_position"]["unrealized_pnl"] = (
+            0.0  # Initial for new position
         )
-    else:
-        # Real trading - execute market order first
-        result = execute_real_futures_trade(action, CONTRACTS_PER_TRADE, client)
 
-        # ✅ NEW: Place stop-loss and take-profit orders after opening position
-        if result.get("success") and action in ["open_long", "open_short"]:
-            position_type = "long" if action == "open_long" else "short"
+    # ✅ NEW: Cancel pending orders when closing position
+    elif result.get("success") and action in ["close_long", "close_short"]:
+        # Get order IDs from positions data
+        stop_order_id = positions_data["current_position"].get("stop_loss_order_id")
+        tp_order_id = positions_data["current_position"].get("take_profit_order_id")
 
-            # Place stop-loss order
-            if stop_loss:
-                print(f"   📍 Placing stop-loss order at ${stop_loss:,.2f}...")
-                stop_result = place_stop_loss_order(
-                    client, position_type, CONTRACTS_PER_TRADE, stop_loss
-                )
-                result["message"] += f"\n   {stop_result['message']}"
+        # Cancel any pending orders
+        order_ids = [oid for oid in [stop_order_id, tp_order_id] if oid]
+        if order_ids:
+            print(f"   🚫 Cancelling {len(order_ids)} pending orders...")
+            cancel_pending_orders(client, order_ids)
 
-                # Store stop-loss order ID in positions data
-                if stop_result.get("success"):
-                    positions_data["current_position"]["stop_loss"] = stop_loss
-                    positions_data["current_position"]["stop_loss_order_id"] = (
-                        stop_result.get("order_id")
-                    )
+        # Calculate P/L for real trading (in USD)
+        entry_price = positions_data["current_position"].get("entry_price")
+        if entry_price:
+            multiplier = CONTRACTS_PER_TRADE * CONTRACT_MULTIPLIER
+            if action == "close_long":
+                profit_loss = (price - entry_price) * multiplier
+            else:  # close_short
+                profit_loss = (entry_price - price) * multiplier
 
-            # Place take-profit order
-            if take_profit:
-                print(f"   🎯 Placing take-profit order at ${take_profit:,.2f}...")
-                tp_result = place_take_profit_order(
-                    client, position_type, CONTRACTS_PER_TRADE, take_profit
-                )
-                result["message"] += f"\n   {tp_result['message']}"
+            # Update trade statistics
+            positions_data["total_trades"] += 1
+            if profit_loss > 0:
+                positions_data["winning_trades"] += 1
+                emoji = "✅"
+            else:
+                positions_data["losing_trades"] += 1
+                emoji = "❌"
 
-                # Store take-profit order ID in positions data
-                if tp_result.get("success"):
-                    positions_data["current_position"]["take_profit"] = take_profit
-                    positions_data["current_position"]["take_profit_order_id"] = (
-                        tp_result.get("order_id")
-                    )
-
-            # Update positions data with entry info
-            positions_data["current_position"]["status"] = position_type
-            positions_data["current_position"]["entry_price"] = price
-            positions_data["current_position"]["entry_time"] = (
-                datetime.now().isoformat()
-            )
-            positions_data["current_position"]["unrealized_pnl"] = (
-                0.0  # Initial for new position
+            # Add to trade history
+            positions_data["trade_history"].append(
+                {
+                    "type": "long" if action == "close_long" else "short",
+                    "entry_price": entry_price,
+                    "exit_price": price,
+                    "profit_loss": profit_loss,
+                    "entry_time": positions_data["current_position"]["entry_time"],
+                    "exit_time": datetime.now().isoformat(),
+                }
             )
 
-        # ✅ NEW: Cancel pending orders when closing position
-        elif result.get("success") and action in ["close_long", "close_short"]:
-            # Get order IDs from positions data
-            stop_order_id = positions_data["current_position"].get("stop_loss_order_id")
-            tp_order_id = positions_data["current_position"].get("take_profit_order_id")
+            # Update message with P/L
+            result["message"] += f" | P/L: ${profit_loss:+,.2f}"
+            result["message"] = result["message"].replace("CLOSED", f"{emoji} CLOSED")
 
-            # Cancel any pending orders
-            order_ids = [oid for oid in [stop_order_id, tp_order_id] if oid]
-            if order_ids:
-                print(f"   🚫 Cancelling {len(order_ids)} pending orders...")
-                cancel_pending_orders(client, order_ids)
+        # Clear positions data
+        positions_data["current_position"] = {
+            "status": "none",
+            "entry_price": None,
+            "entry_time": None,
+            "stop_loss": None,
+            "take_profit": None,
+            "trade_id": None,
+            "action": None,
+            "stop_loss_order_id": None,
+            "take_profit_order_id": None,
+            "unrealized_pnl": None,
+        }
 
-            # Calculate P/L for real trading
-            entry_price = positions_data["current_position"].get("entry_price")
-            if entry_price:
-                if action == "close_long":
-                    profit_loss = price - entry_price
-                else:  # close_short
-                    profit_loss = entry_price - price
+        result["profit_loss"] = profit_loss if "profit_loss" in locals() else 0
 
-                # Update trade statistics
-                positions_data["total_trades"] += 1
-                if profit_loss > 0:
-                    positions_data["winning_trades"] += 1
-                else:
-                    positions_data["losing_trades"] += 1
-
-                # Add to trade history
-                positions_data["trade_history"].append(
-                    {
-                        "type": "long" if action == "close_long" else "short",
-                        "entry_price": entry_price,
-                        "exit_price": price,
-                        "profit_loss": profit_loss,
-                        "entry_time": positions_data["current_position"]["entry_time"],
-                        "exit_time": datetime.now().isoformat(),
-                    }
-                )
-
-            # Clear positions data
-            positions_data["current_position"] = {
-                "status": "none",
-                "entry_price": None,
-                "entry_time": None,
-                "stop_loss": None,
-                "take_profit": None,
-                "trade_id": None,
-                "action": None,
-                "stop_loss_order_id": None,
-                "take_profit_order_id": None,
-                "unrealized_pnl": None,
-            }
-
-        return result
+    return result
 
 
 def manage_positions(positions_data, trade_data, current_price, csv_data, client=None):
@@ -708,6 +585,8 @@ def manage_positions(positions_data, trade_data, current_price, csv_data, client
                     }
                 )
             else:
+                # Cancel any previous limit orders before new trade
+                cancel_all_open_orders(client)
                 result = execute_trade(
                     "open_long",
                     current_price,
@@ -728,6 +607,8 @@ def manage_positions(positions_data, trade_data, current_price, csv_data, client
                     }
                 )
             else:
+                # Cancel any previous limit orders before new trade
+                cancel_all_open_orders(client)
                 result = execute_trade(
                     "open_short",
                     current_price,
@@ -745,9 +626,11 @@ def manage_positions(positions_data, trade_data, current_price, csv_data, client
     elif current_status == "long":
         if new_signal == "buy":
             entry = positions_data["current_position"]["entry_price"]
+            multiplier = CONTRACTS_PER_TRADE * CONTRACT_MULTIPLIER
+            fallback_pl = (current_price - entry) * multiplier if entry else 0
             pl = positions_data["current_position"].get(
-                "unrealized_pnl", current_price - entry
-            )  # FIXED: Use stored pnl if available
+                "unrealized_pnl", fallback_pl
+            )  # FIXED: Use stored pnl if available, fallback to calculated USD
             results.append(
                 {
                     "success": True,
@@ -806,6 +689,8 @@ def manage_positions(positions_data, trade_data, current_price, csv_data, client
                     }
                 )
             else:
+                # Cancel any previous limit orders before new trade (though just closed)
+                cancel_all_open_orders(client)
                 result2 = execute_trade(
                     "open_short",
                     current_price,
@@ -824,9 +709,11 @@ def manage_positions(positions_data, trade_data, current_price, csv_data, client
     elif current_status == "short":
         if new_signal == "sell":
             entry = positions_data["current_position"]["entry_price"]
+            multiplier = CONTRACTS_PER_TRADE * CONTRACT_MULTIPLIER
+            fallback_pl = (entry - current_price) * multiplier if entry else 0
             pl = positions_data["current_position"].get(
-                "unrealized_pnl", entry - current_price
-            )  # FIXED: Use stored pnl if available
+                "unrealized_pnl", fallback_pl
+            )  # FIXED: Use stored pnl if available, fallback to calculated USD
             results.append(
                 {
                     "success": True,
@@ -885,6 +772,8 @@ def manage_positions(positions_data, trade_data, current_price, csv_data, client
                     }
                 )
             else:
+                # Cancel any previous limit orders before new trade (though just closed)
+                cancel_all_open_orders(client)
                 result2 = execute_trade(
                     "open_long",
                     current_price,
@@ -1053,12 +942,11 @@ def generate_chart(data, trade_data=None, trade_invalid=False):
 
     # Save to BytesIO instead of file
     buf = BytesIO()
-    trading_mode = "PAPER" if PAPER_TRADING else "LIVE"
     plot_kwargs = {
         "type": "candle",
         "style": style,
         "volume": True,
-        "title": f"{CRYPTO_SYMBOL} FUTURES ({FUTURES_PRODUCT_ID}) - {trading_mode} - Last {TIMEFRAME_MINUTES} min",
+        "title": f"{CRYPTO_SYMBOL} FUTURES ({FUTURES_PRODUCT_ID}) - LIVE - Last {TIMEFRAME_MINUTES} min",
         "returnfig": True,  # Return figure object so we can add text
     }
 
@@ -1447,6 +1335,7 @@ def send_to_discord(
         entry = positions_data["current_position"].get("entry_price", "N/A")
         stop = positions_data["current_position"].get("stop_loss", "N/A")
         tp = positions_data["current_position"].get("take_profit", "N/A")
+        pl = positions_data["current_position"].get("unrealized_pnl", 0)
         full_description += f"\n\n**📊 Current Position Levels:**"
         full_description += (
             f"\n🔵 Entry: ${entry:,.2f}"
@@ -1463,6 +1352,7 @@ def send_to_discord(
             if isinstance(tp, (int, float))
             else f"\n🟢 Take Profit: {tp}"
         )
+        full_description += f"\n💰 Current P/L: ${pl:+,.2f}"
         if trade_data and "confidence" in trade_data:
             full_description += f"\n📈 Confidence: {trade_data['confidence']}%"
     elif trade_data and trade_data.get("action") != "hold":
@@ -1488,40 +1378,39 @@ def send_to_discord(
     if futures_balance:
         full_description += f"\n\n**💰 Account Balance:** ${futures_balance:,.2f}"
 
-    # Add performance stats
-    if positions_data and PAPER_TRADING:  # FIXED: Only show in paper mode
-        balance = positions_data.get("paper_trading_balance", 2000.0)
+    # Add performance stats (live stats without paper balance)
+    if positions_data:
         total = positions_data.get("total_trades", 0)
-        wins = positions_data.get("winning_trades", 0)
-        losses = positions_data.get("losing_trades", 0)
-        win_rate = (wins / total * 100) if total > 0 else 0
-
-        # Calculate average win/loss from trade history
-        trade_history = positions_data.get("trade_history", [])
-        total_profit = sum(
-            t["profit_loss"] for t in trade_history if t["profit_loss"] > 0
-        )
-        total_loss = abs(
-            sum(t["profit_loss"] for t in trade_history if t["profit_loss"] < 0)
-        )
-        avg_win = (total_profit / wins) if wins > 0 else 0
-        avg_loss = (total_loss / losses) if losses > 0 else 0
-        avg_ratio = (avg_win / avg_loss) if avg_loss > 0 else avg_win
-
-        full_description += f"\n\n**📈 Paper Trading Stats:**"
-        full_description += f"\n💰 Balance: ${balance:,.2f}"
-        full_description += f"\n📊 Trades: {total} ({wins}W / {losses}L)"
         if total > 0:
-            if losses > 0:
-                full_description += f"\n📊 Avg W:L: {avg_ratio:.2f}:1 (avg win: ${avg_win:.2f}, avg loss: ${avg_loss:.2f})"
-            else:
-                full_description += (
-                    f"\n📊 Avg W:L: Perfect! (${avg_win:.2f} avg win, no losses)"
-                )
-            full_description += f"\n🎯 Win Rate: {win_rate:.1f}%"
+            wins = positions_data.get("winning_trades", 0)
+            losses = positions_data.get("losing_trades", 0)
+            win_rate = (wins / total * 100) if total > 0 else 0
+
+            # Calculate average win/loss from trade history
+            trade_history = positions_data.get("trade_history", [])
+            total_profit = sum(
+                t["profit_loss"] for t in trade_history if t["profit_loss"] > 0
+            )
+            total_loss = abs(
+                sum(t["profit_loss"] for t in trade_history if t["profit_loss"] < 0)
+            )
+            avg_win = (total_profit / wins) if wins > 0 else 0
+            avg_loss = (total_loss / losses) if losses > 0 else 0
+            avg_ratio = (avg_win / avg_loss) if avg_loss > 0 else avg_win
+
+            full_description += f"\n\n**📈 Trading Stats:**"
+            full_description += f"\n📊 Trades: {total} ({wins}W / {losses}L)"
+            if total > 0:
+                if losses > 0:
+                    full_description += f"\n📊 Avg W:L: {avg_ratio:.2f}:1 (avg win: ${avg_win:.2f}, avg loss: ${avg_loss:.2f})"
+                else:
+                    full_description += (
+                        f"\n📊 Avg W:L: Perfect! (${avg_win:.2f} avg win, no losses)"
+                    )
+                full_description += f"\n🎯 Win Rate: {win_rate:.1f}%"
 
     # Determine trading mode for footer
-    trading_mode_text = "🧪 PAPER TRADING" if PAPER_TRADING else "💰 LIVE TRADING"
+    trading_mode_text = "💰 LIVE TRADING"
 
     # Format as Discord embed for better readability
     payload = {
@@ -1557,17 +1446,16 @@ def send_to_discord(
 if __name__ == "__main__":
     from coinbase.rest import RESTClient
 
-    trading_mode = "🧪 PAPER TRADING" if PAPER_TRADING else "💰 LIVE TRADING"
+    trading_mode = "💰 LIVE TRADING"
     print("=" * 70)
     print(f"🤖 {CRYPTO_SYMBOL} FUTURES TRADING BOT - {trading_mode}")
     print(f"📦 Product: {FUTURES_PRODUCT_ID}")
     print(f"📊 Contracts per trade: {CONTRACTS_PER_TRADE}")
     print("=" * 70)
 
-    if not PAPER_TRADING:
-        print("\n⚠️  ⚠️  ⚠️  WARNING: LIVE TRADING MODE ENABLED ⚠️  ⚠️  ⚠️")
-        print("This bot will execute REAL trades with REAL money!")
-        print("=" * 70)
+    print("\n⚠️  ⚠️  ⚠️  WARNING: LIVE TRADING MODE ENABLED ⚠️  ⚠️  ⚠️")
+    print("This bot will execute REAL trades with REAL money!")
+    print("=" * 70)
 
     # Initialize Coinbase client (needed for both paper and real trading for data)
     client = RESTClient(
@@ -1577,20 +1465,19 @@ if __name__ == "__main__":
 
     # FIXED: Fetch real futures balance if in LIVE mode
     futures_balance = None
-    if not PAPER_TRADING:
-        try:
-            balance_summary = client.get_futures_balance_summary()
-            balance_summary_dict = (
-                balance_summary.to_dict() if hasattr(balance_summary, "to_dict") else {}
-            )
-            futures_balance = float(
-                balance_summary_dict.get("balance_summary", {})
-                .get("total_usd_balance", {})
-                .get("value", 0)
-            )
-            print(f"💰 Real Futures Balance: ${futures_balance:,.2f}")
-        except Exception as e:
-            print(f"⚠️ Failed to fetch futures balance: {e}")
+    try:
+        balance_summary = client.get_futures_balance_summary()
+        balance_summary_dict = (
+            balance_summary.to_dict() if hasattr(balance_summary, "to_dict") else {}
+        )
+        futures_balance = float(
+            balance_summary_dict.get("balance_summary", {})
+            .get("total_usd_balance", {})
+            .get("value", 0)
+        )
+        print(f"💰 Real Futures Balance: ${futures_balance:,.2f}")
+    except Exception as e:
+        print(f"⚠️ Failed to fetch futures balance: {e}")
 
     # Load current position state
     positions_data = load_positions()
@@ -1601,9 +1488,8 @@ if __name__ == "__main__":
         print(f"   Entry: ${positions_data['current_position']['entry_price']:,.2f}")
 
     # Show stats if there are any trades
-    if positions_data.get("total_trades", 0) > 0:
-        balance = positions_data.get("paper_trading_balance", 2000.0)
-        total = positions_data.get("total_trades", 0)
+    total = positions_data.get("total_trades", 0)
+    if total > 0:
         wins = positions_data.get("winning_trades", 0)
         losses = positions_data.get("losing_trades", 0)
         win_rate = (wins / total * 100) if total > 0 else 0
@@ -1620,8 +1506,7 @@ if __name__ == "__main__":
         avg_loss = (total_loss / losses) if losses > 0 else 0
         avg_ratio = (avg_win / avg_loss) if avg_loss > 0 else avg_win
 
-        print(f"\n📈 Paper Trading Stats:")
-        print(f"   💰 Balance: ${balance:,.2f}")
+        print(f"\n📈 Trading Stats:")
         print(f"   📊 Trades: {total} ({wins}W / {losses}L)")
         if losses > 0:
             print(
@@ -1646,6 +1531,8 @@ if __name__ == "__main__":
     print("📊 Checking actual futures position on Coinbase...")
     real_position = get_current_futures_position(client)
 
+    trade_results = []  # Initialize here to collect desync if any
+
     if real_position.get("exists") is None:
         error_msg = real_position.get("error", "Unknown API error")
         print(f"   ⚠️ API error (keeping local state): {error_msg}")
@@ -1667,12 +1554,12 @@ if __name__ == "__main__":
         # FIXED: If entry_vwap == 0, back-calculate entry from unrealized_pnl
         if positions_data["current_position"]["entry_price"] == 0:
             pnl = real_position["unrealized_pnl"]
-            size = real_position["size"]
+            size = real_position["size"] * CONTRACT_MULTIPLIER
             if size > 0 and pnl is not None:
                 if real_position["side"] == "LONG":
-                    entry = current_price - (pnl / (size * CONTRACT_MULTIPLIER))
+                    entry = current_price - (pnl / size)
                 else:  # SHORT
-                    entry = current_price + (pnl / (size * CONTRACT_MULTIPLIER))
+                    entry = current_price + (pnl / size)
                 positions_data["current_position"]["entry_price"] = entry
                 print(f"   🔄 Back-calculated entry price: ${entry:,.2f} (from P/L)")
 
@@ -1690,15 +1577,18 @@ if __name__ == "__main__":
             if order_ids:
                 print(f"   🚫 Cancelling {len(order_ids)} lingering orders...")
                 cancel_pending_orders(client, order_ids)
-            # FIXED: Add closure to history with estimated P/L
+            # FIXED: Add closure to history with estimated P/L (in USD)
             entry = positions_data["current_position"]["entry_price"]
+            multiplier = CONTRACTS_PER_TRADE * CONTRACT_MULTIPLIER
             if entry is not None:
                 if positions_data["current_position"]["status"] == "long":
-                    profit_loss = current_price - entry
+                    profit_loss = (current_price - entry) * multiplier
                     trade_type = "long"
+                    emoji = "✅" if profit_loss > 0 else "❌"
                 else:
-                    profit_loss = entry - current_price
+                    profit_loss = (entry - current_price) * multiplier
                     trade_type = "short"
+                    emoji = "✅" if profit_loss > 0 else "❌"
                 positions_data["trade_history"].append(
                     {
                         "type": trade_type,
@@ -1715,6 +1605,14 @@ if __name__ == "__main__":
                     positions_data["winning_trades"] += 1
                 else:
                     positions_data["losing_trades"] += 1
+
+                # Add to trade_results for Discord
+                trade_results.append(
+                    {
+                        "success": True,
+                        "message": f"{emoji} Desync: Position closed externally at ~${current_price:,.2f} | P/L: ${profit_loss:+,.2f}",
+                    }
+                )
         else:
             print("   ✅ No open position on Coinbase")
         # FIXED: Always clear local to match API (but only if no error)
@@ -1741,9 +1639,10 @@ if __name__ == "__main__":
 
     # Manage positions (execute trades, check stops, etc.)
     print("💼 Managing positions...")
-    trade_results = manage_positions(
+    manage_results = manage_positions(
         positions_data, trade_data, current_price, data, client
     )
+    trade_results.extend(manage_results)
 
     # Print trade results
     if trade_results:
