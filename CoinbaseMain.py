@@ -1301,6 +1301,17 @@ DOUBLE-CHECK before responding:
     # Parse response to extract analysis and trade data
     analysis, trade_data = parse_llm_response(full_response)
 
+    # FIXED: If parsing fails, fallback to hold
+    if trade_data is None:
+        trade_data = {
+            "action": "hold",
+            "entry_price": current_price,
+            "stop_loss": None,
+            "take_profit": None,
+            "confidence": 0,
+        }
+        print("⚠️ LLM response parsing failed - defaulting to HOLD")
+
     return analysis, trade_data
 
 
@@ -1451,7 +1462,7 @@ def send_to_discord(
             if isinstance(tp, (int, float))
             else f"\n🟢 Take Profit: {tp}"
         )
-        if "confidence" in trade_data:
+        if trade_data and "confidence" in trade_data:
             full_description += f"\n📈 Confidence: {trade_data['confidence']}%"
     elif trade_data and trade_data.get("action") != "hold":
         # Show proposed levels for new trades
