@@ -1650,6 +1650,13 @@ if __name__ == "__main__":
             print(
                 "   ⚠️ API shows no position, but local has one. Assuming closed externally (e.g., stop hit)."
             )
+            # Cancel any lingering orders
+            stop_order_id = positions_data["current_position"].get("stop_loss_order_id")
+            tp_order_id = positions_data["current_position"].get("take_profit_order_id")
+            order_ids = [oid for oid in [stop_order_id, tp_order_id] if oid]
+            if order_ids:
+                print(f"   🚫 Cancelling {len(order_ids)} lingering orders...")
+                cancel_pending_orders(client, order_ids)
             # FIXED: Add closure to history with estimated P/L
             entry = positions_data["current_position"]["entry_price"]
             if entry is not None:
