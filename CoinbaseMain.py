@@ -192,7 +192,7 @@ def execute_real_futures_trade(action, contracts, client):
                     "status", "FILLED"
                 )  # Market IOC usually FILLED
             except Exception as status_err:
-                print(f"Warning: Could not fetch order status: {status_err}")
+                print(f"Warning: Could not fetch order status: {str(status_err)}")
                 status = "FILLED"  # Assume for market orders
 
             result["success"] = True
@@ -201,16 +201,19 @@ def execute_real_futures_trade(action, contracts, client):
                 f"{'🟢' if order_side == 'BUY' else '🔴'} {action.replace('_', ' ').upper()} - {contracts} contract(s) | Order ID: {order_id[:8]}... | Status: {status}"
             )
         else:
-            error_msg = order_dict.get("error_response", {}).get(
-                "message", "Unknown error"
+            error_response = order_dict.get("error_response", {})
+            error_msg = error_response.get(
+                "message", error_response.get("error_details", "Unknown error")
             )
+            print(f"Trade failed with error: {error_msg}")
             result["message"] = f"❌ Trade execution failed: {error_msg}"
             result["order_id"] = "failed"
             result["status"] = "failed"
 
     except Exception as e:
-        result["message"] = f"❌ Trade execution failed: {e}"
-        print(f"Error details: {e}")
+        error_str = str(e)
+        print(f"Error details: {error_str}")
+        result["message"] = f"❌ Trade execution failed: {error_str}"
 
     return result
 
@@ -646,12 +649,13 @@ def manage_positions(positions_data, trade_data, current_price, csv_data, client
 
     elif current_status == "long":
         if new_signal == "buy":
+            # Fetch latest pnl
+            real_position = get_current_futures_position(client)
             entry = positions_data["current_position"]["entry_price"]
             multiplier = CONTRACTS_PER_TRADE * CONTRACT_MULTIPLIER
             fallback_pl = (current_price - entry) * multiplier if entry else 0
-            pl = positions_data["current_position"].get(
-                "unrealized_pnl", fallback_pl
-            )  # FIXED: Use stored pnl if available, fallback to calculated USD
+            pl = real_position.get("unrealized_pnl", fallback_pl)
+            positions_data["current_position"]["unrealized_pnl"] = pl
             results.append(
                 {
                     "success": True,
@@ -729,12 +733,13 @@ def manage_positions(positions_data, trade_data, current_price, csv_data, client
 
     elif current_status == "short":
         if new_signal == "sell":
+            # Fetch latest pnl
+            real_position = get_current_futures_position(client)
             entry = positions_data["current_position"]["entry_price"]
             multiplier = CONTRACTS_PER_TRADE * CONTRACT_MULTIPLIER
             fallback_pl = (entry - current_price) * multiplier if entry else 0
-            pl = positions_data["current_position"].get(
-                "unrealized_pnl", fallback_pl
-            )  # FIXED: Use stored pnl if available, fallback to calculated USD
+            pl = real_position.get("unrealized_pnl", fallback_pl)
+            positions_data["current_position"]["unrealized_pnl"] = pl
             results.append(
                 {
                     "success": True,
