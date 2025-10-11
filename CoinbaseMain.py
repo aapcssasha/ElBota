@@ -1576,12 +1576,16 @@ if __name__ == "__main__":
     )
 
     # FIXED: Fetch real futures balance if in LIVE mode
+    # FIXED: Fetch real futures balance if in LIVE mode
     futures_balance = None
     if not PAPER_TRADING:
         try:
             balance_summary = client.get_futures_balance_summary()
+            balance_summary_dict = (
+                balance_summary.to_dict() if hasattr(balance_summary, "to_dict") else {}
+            )
             futures_balance = float(
-                balance_summary.get("available_balance", {}).get("value", 0)
+                balance_summary_dict.get("available_balance", {}).get("value", 0)
             )
             print(f"💰 Real Futures Balance: ${futures_balance:,.2f}")
         except Exception as e:
