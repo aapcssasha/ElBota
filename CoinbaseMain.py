@@ -1423,6 +1423,7 @@ def send_to_discord(
     trade_data=None,
     trade_results=None,
     positions_data=None,
+    futures_balance=None,
 ):
     """Send analysis and chart to Discord with position management info"""
 
@@ -1483,9 +1484,13 @@ def send_to_discord(
             if "confidence" in trade_data:
                 full_description += f"\n📈 Confidence: {trade_data['confidence']}%"
 
+    # FIXED: Add real account balance if available
+    if futures_balance:
+        full_description += f"\n\n**💰 Account Balance:** ${futures_balance:,.2f}"
+
     # Add performance stats
     if positions_data and PAPER_TRADING:  # FIXED: Only show in paper mode
-        balance = positions_data.get("paper_trading_balance", 10000)
+        balance = positions_data.get("paper_trading_balance", 2000.0)
         total = positions_data.get("total_trades", 0)
         wins = positions_data.get("winning_trades", 0)
         losses = positions_data.get("losing_trades", 0)
@@ -1570,6 +1575,18 @@ if __name__ == "__main__":
         api_secret=os.getenv("COINBASE_API_SECRET"),
     )
 
+    # FIXED: Fetch real futures balance if in LIVE mode
+    futures_balance = None
+    if not PAPER_TRADING:
+        try:
+            balance_summary = client.get_futures_balance_summary()
+            futures_balance = float(
+                balance_summary.get("available_balance", {}).get("value", 0)
+            )
+            print(f"💰 Real Futures Balance: ${futures_balance:,.2f}")
+        except Exception as e:
+            print(f"⚠️ Failed to fetch futures balance: {e}")
+
     # Load current position state
     positions_data = load_positions()
     print(
@@ -1580,7 +1597,7 @@ if __name__ == "__main__":
 
     # Show stats if there are any trades
     if positions_data.get("total_trades", 0) > 0:
-        balance = positions_data.get("paper_trading_balance", 10000)
+        balance = positions_data.get("paper_trading_balance", 2000.0)
         total = positions_data.get("total_trades", 0)
         wins = positions_data.get("winning_trades", 0)
         losses = positions_data.get("losing_trades", 0)
@@ -1757,6 +1774,7 @@ if __name__ == "__main__":
             trade_data,
             trade_results,
             positions_data,
+            futures_balance,
         )
     else:
         print("⚠️  No Discord webhook configured")
