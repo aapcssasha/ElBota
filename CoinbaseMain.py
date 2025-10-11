@@ -1239,8 +1239,22 @@ DOUBLE-CHECK before responding:
 def parse_llm_response(response_text):
     """Extract human analysis and structured trade data from ChatGPT response"""
 
-    # Try to find JSON in the response
-    json_match = re.search(r'\{[^}]*"action"[^}]*\}', response_text, re.DOTALL)
+    # Try to parse as complete JSON first (new nested format)
+    try:
+        full_json = json.loads(response_text)
+        if isinstance(full_json, dict):
+            # Check if it has the nested structure: {"analysis": "...", "trade_data": {...}}
+            if "analysis" in full_json and "trade_data" in full_json:
+                return full_json["analysis"], full_json["trade_data"]
+            # Check if it has "action" at top level (old flat format)
+            elif "action" in full_json:
+                return "", full_json
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # Try to find JSON in the response (old method for backwards compatibility)
+    # This regex now allows nested braces
+    json_match = re.search(r'\{(?:[^{}]|(?:\{[^{}]*\}))*"action"[^}]*\}', response_text, re.DOTALL)
 
     if json_match:
         try:
@@ -1345,6 +1359,8 @@ def send_to_discord(
     trade_results=None,
     positions_data=None,
     futures_balance=None,
+    buying_power=None,
+    daily_pnl=None,
 ):
     """Send analysis and chart to Discord with position management info"""
 
@@ -1407,9 +1423,15 @@ def send_to_discord(
             if "confidence" in trade_data:
                 full_description += f"\n📈 Confidence: {trade_data['confidence']}%"
 
-    # FIXED: Add real account balance if available
-    if futures_balance:
-        full_description += f"\n\n**💰 Account Balance:** ${futures_balance:,.2f}"
+    # Add real account balance if available
+    if futures_balance or buying_power or daily_pnl is not None:
+        full_description += f"\n\n**💰 Account:**"
+        if futures_balance:
+            full_description += f"\n💵 Total Balance: ${futures_balance:,.2f}"
+        if buying_power:
+            full_description += f"\n📊 Buying Power: ${buying_power:,.2f}"
+        if daily_pnl is not None:
+            full_description += f"\n📈 Today's P/L: ${daily_pnl:+,.2f}"
 
     # Add performance stats (live stats without paper balance)
     if positions_data:
@@ -1496,19 +1518,24 @@ if __name__ == "__main__":
         api_secret=os.getenv("COINBASE_API_SECRET"),
     )
 
-    # FIXED: Fetch real futures balance if in LIVE mode
+    # Fetch real futures balance
     futures_balance = None
+    buying_power = None
+    daily_pnl = None
     try:
         balance_summary = client.get_futures_balance_summary()
         balance_summary_dict = (
             balance_summary.to_dict() if hasattr(balance_summary, "to_dict") else {}
         )
-        futures_balance = float(
-            balance_summary_dict.get("balance_summary", {})
-            .get("total_usd_balance", {})
-            .get("value", 0)
-        )
-        print(f"💰 Real Futures Balance: ${futures_balance:,.2f}")
+        bal_sum = balance_summary_dict.get("balance_summary", {})
+
+        futures_balance = float(bal_sum.get("total_usd_balance", {}).get("value", 0))
+        buying_power = float(bal_sum.get("futures_buying_power", {}).get("value", 0))
+        daily_pnl = float(bal_sum.get("daily_realized_pnl", {}).get("value", 0))
+
+        print(f"💰 Total Balance: ${futures_balance:,.2f}")
+        print(f"📊 Buying Power: ${buying_power:,.2f}")
+        print(f"📈 Today's P/L: ${daily_pnl:+,.2f}")
     except Exception as e:
         print(f"⚠️ Failed to fetch futures balance: {e}")
 
@@ -1757,6 +1784,8 @@ if __name__ == "__main__":
             trade_results,
             positions_data,
             futures_balance,
+            buying_power,
+            daily_pnl,
         )
     else:
         print("⚠️  No Discord webhook configured")
