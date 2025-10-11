@@ -11,7 +11,7 @@
     "take_profit_order_id": null,
     "unrealized_pnl": null
   },
-  "last_signal": "hold",
+  "last_signal": "sell",
   "trade_history": [
     {
       "type": "long",
@@ -99,10 +99,18 @@
       "entry_time": "2025-10-11T06:48:22.404713",
       "exit_time": "2025-10-11T07:21:22.833937",
       "note": "Closed externally (desync detected)"
+    },
+    {
+      "type": "long",
+      "entry_price": 3838.0,
+      "exit_price": 3838.0,
+      "profit_loss": 0.0,
+      "entry_time": "2025-10-11T08:23:10.406861",
+      "exit_time": "2025-10-11T08:23:16.661881"
     }
   ],
   "paper_trading_balance": 2000.0,
-  "total_trades": 10,
+  "total_trades": 11,
   "winning_trades": 6,
-  "losing_trades": 4
+  "losing_trades": 5
 }
