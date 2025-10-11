@@ -1,17 +1,17 @@
 {
   "current_position": {
-    "status": "short",
-    "entry_price": 3761.0,
-    "entry_time": "2025-10-11T22:33:31.059200",
-    "stop_loss": 3770.0,
-    "take_profit": 3747.0,
+    "status": "none",
+    "entry_price": null,
+    "entry_time": null,
+    "stop_loss": null,
+    "take_profit": null,
     "trade_id": null,
     "action": null,
     "stop_loss_order_id": "37690df4-8df2-4ee8-8def-a7d364d4c63d",
     "take_profit_order_id": "90df0dd0-b3f0-419c-851f-641fe91d89c0",
-    "unrealized_pnl": 0.0
+    "unrealized_pnl": null
   },
-  "last_signal": "sell",
+  "last_signal": "buy",
   "trade_history": [
     {
       "type": "long",
@@ -186,10 +186,19 @@
       "entry_time": "2025-10-11T22:03:01.075489",
       "exit_time": "2025-10-11T22:19:48.350897",
       "note": "Closed target_hit (desync detected)"
+    },
+    {
+      "type": "short",
+      "entry_price": 3761.0,
+      "exit_price": 3780.5,
+      "profit_loss": -1.9500000000000002,
+      "entry_time": "2025-10-11T22:33:31.059200",
+      "exit_time": "2025-10-11T22:40:03.205643",
+      "note": "Closed externally (desync detected)"
     }
   ],
   "paper_trading_balance": 2000.0,
-  "total_trades": 20,
+  "total_trades": 21,
   "winning_trades": 9,
-  "losing_trades": 11
+  "losing_trades": 12
 }
