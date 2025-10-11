@@ -73,190 +73,67 @@ def save_positions(positions_data):
         json.dump(positions_data, f, indent=2)
 
 
-def manage_positions(positions_data, trade_data, current_price, csv_data, client=None):
-    """Manage positions based on current state and new signal"""
-    results = []
-    current_status = positions_data["current_position"]["status"]
-    new_signal = trade_data.get("action", "hold") if trade_data else "hold"
+def check_stop_target(positions_data, csv_data):
+    """Check if stop-loss or take-profit has been hit by analyzing candle highs/lows
 
-    # Check if stop-loss or take-profit hit first (checks candle highs/lows)
-    should_close, reason, exit_price, orders_to_cancel = check_stop_target(
-        positions_data, csv_data
-    )
-    if should_close:
-        # Cancel the other pending order
-        if orders_to_cancel:
-            print(
-                f"   🚫 Cancelling {len(orders_to_cancel)} pending order(s) after {reason}..."
-            )
-            cancel_pending_orders(client, orders_to_cancel)
+    Returns:
+        tuple: (should_close, reason, exit_price, orders_to_cancel)
+    """
+    pos = positions_data["current_position"]
 
-        if current_status == "long":
-            result = execute_trade(
-                "close_long", exit_price, positions_data, client=client
-            )
-            result["message"] += f" ({reason.replace('_', ' ').title()})"
-            results.append(result)
-            current_status = "none"  # Update for next logic
-        elif current_status == "short":
-            result = execute_trade(
-                "close_short", exit_price, positions_data, client=client
-            )
-            result["message"] += f" ({reason.replace('_', ' ').title()})"
-            results.append(result)
-            current_status = "none"
+    if pos["status"] == "none":
+        return False, None, None, []
 
-    # Position management logic
-    if current_status == "none":
-        if new_signal == "buy":
-            # Validate trade levels before executing
-            is_valid, error_msg = validate_trade_levels(trade_data, current_price)
-            if not is_valid:
-                results.append(
-                    {
-                        "success": False,
-                        "message": f"⚠️ Invalid trade levels: {error_msg}",
-                    }
-                )
-            else:
-                # Cancel ALL open orders before new trade
-                print("   🚫 Cancelling all open orders before new trade...")
-                cancel_all_open_orders(client)
-                result = execute_trade(
-                    "open_long",
-                    current_price,
-                    positions_data,
-                    trade_data.get("stop_loss"),
-                    trade_data.get("take_profit"),
-                    client=client,
-                )
-                results.append(result)
-        elif new_signal == "sell":
-            # Validate trade levels before executing
-            is_valid, error_msg = validate_trade_levels(trade_data, current_price)
-            if not is_valid:
-                results.append(
-                    {
-                        "success": False,
-                        "message": f"⚠️ Invalid trade levels: {error_msg}",
-                    }
-                )
-            else:
-                # Cancel ALL open orders before new trade
-                print("   🚫 Cancelling all open orders before new trade...")
-                cancel_all_open_orders(client)
-                result = execute_trade(
-                    "open_short",
-                    current_price,
-                    positions_data,
-                    trade_data.get("stop_loss"),
-                    trade_data.get("take_profit"),
-                    client=client,
-                )
-                results.append(result)
-        elif new_signal == "hold":
-            results.append(
-                {"success": True, "message": "⚪ No position | Signal: HOLD"}
-            )
+    # Parse CSV data to get candles
+    lines = csv_data.strip().split("\n")[1:]  # Skip header
+    candles = []
+    for line in lines:
+        parts = line.split(",")
+        candles.append(
+            {
+                "timestamp": int(parts[0]),
+                "high": float(parts[2]),
+                "low": float(parts[3]),
+            }
+        )
 
-    elif current_status == "long":
-        if new_signal == "buy":
-            # Keep existing BUY signal logic...
-            # (keep your existing code for holding long)
-            pass  # Your existing code here
+    # Filter candles after entry_time
+    from dateutil import parser
 
-        elif new_signal == "sell":
-            # Close long and CANCEL its orders, then open short
-            result1 = execute_trade(
-                "close_long", current_price, positions_data, client=client
-            )
-            results.append(result1)
+    entry_timestamp = int(parser.parse(pos["entry_time"]).timestamp())
+    relevant_candles = [c for c in candles if c["timestamp"] >= entry_timestamp]
 
-            # Cancel ALL open orders after closing
-            print("   🚫 Cancelling all open orders before new trade...")
-            cancel_all_open_orders(client)
+    # Prepare order IDs to cancel
+    stop_order_id = pos.get("stop_loss_order_id")
+    tp_order_id = pos.get("take_profit_order_id")
 
-            # Validate before opening short
-            is_valid, error_msg = validate_trade_levels(trade_data, current_price)
-            if not is_valid:
-                results.append(
-                    {
-                        "success": False,
-                        "message": f"⚠️ Invalid trade levels: {error_msg}",
-                    }
-                )
-            else:
-                result2 = execute_trade(
-                    "open_short",
-                    current_price,
-                    positions_data,
-                    trade_data.get("stop_loss"),
-                    trade_data.get("take_profit"),
-                    client=client,
-                )
-                results.append(result2)
+    # For LONG positions: check each candle chronologically
+    if pos["status"] == "long":
+        for candle in relevant_candles:
+            # If target hit in this candle, return it and cancel stop order
+            if pos["take_profit"] and candle["high"] >= pos["take_profit"]:
+                orders_to_cancel = [stop_order_id] if stop_order_id else []
+                return True, "target_hit", pos["take_profit"], orders_to_cancel
 
-        elif new_signal == "hold":
-            # IMPORTANT: Cancel ALL orders before closing on HOLD signal
-            print("   🚫 Cancelling all open orders (signal: HOLD)...")
-            cancel_all_open_orders(client)
+            # If stop hit in this candle, return it and cancel target order
+            if pos["stop_loss"] and candle["low"] <= pos["stop_loss"]:
+                orders_to_cancel = [tp_order_id] if tp_order_id else []
+                return True, "stop_hit", pos["stop_loss"], orders_to_cancel
 
-            result = execute_trade(
-                "close_long", current_price, positions_data, client=client
-            )
-            results.append(result)
+    # For SHORT positions: check each candle chronologically
+    elif pos["status"] == "short":
+        for candle in relevant_candles:
+            # If target hit in this candle, return it and cancel stop order
+            if pos["take_profit"] and candle["low"] <= pos["take_profit"]:
+                orders_to_cancel = [stop_order_id] if stop_order_id else []
+                return True, "target_hit", pos["take_profit"], orders_to_cancel
 
-    elif current_status == "short":
-        if new_signal == "sell":
-            # Keep existing SELL signal logic...
-            # (keep your existing code for holding short)
-            pass  # Your existing code here
+            # If stop hit in this candle, return it and cancel target order
+            if pos["stop_loss"] and candle["high"] >= pos["stop_loss"]:
+                orders_to_cancel = [tp_order_id] if tp_order_id else []
+                return True, "stop_hit", pos["stop_loss"], orders_to_cancel
 
-        elif new_signal == "buy":
-            # Close short and CANCEL its orders, then open long
-            result1 = execute_trade(
-                "close_short", current_price, positions_data, client=client
-            )
-            results.append(result1)
-
-            # Cancel ALL open orders after closing
-            print("   🚫 Cancelling all open orders before new trade...")
-            cancel_all_open_orders(client)
-
-            # Validate before opening long
-            is_valid, error_msg = validate_trade_levels(trade_data, current_price)
-            if not is_valid:
-                results.append(
-                    {
-                        "success": False,
-                        "message": f"⚠️ Invalid trade levels: {error_msg}",
-                    }
-                )
-            else:
-                result2 = execute_trade(
-                    "open_long",
-                    current_price,
-                    positions_data,
-                    trade_data.get("stop_loss"),
-                    trade_data.get("take_profit"),
-                    client=client,
-                )
-                results.append(result2)
-
-        elif new_signal == "hold":
-            # IMPORTANT: Cancel ALL orders before closing on HOLD signal
-            print("   🚫 Cancelling all open orders (signal: HOLD)...")
-            cancel_all_open_orders(client)
-
-            result = execute_trade(
-                "close_short", current_price, positions_data, client=client
-            )
-            results.append(result)
-
-    # Update last signal
-    positions_data["last_signal"] = new_signal
-
-    return results
+    return False, None, None, []
 
 
 def execute_real_futures_trade(action, contracts, client):
@@ -694,25 +571,23 @@ def execute_trade(
 
 
 def manage_positions(positions_data, trade_data, current_price, csv_data, client=None):
-    """Manage positions based on current state and new signal
-
-    Args:
-        positions_data: Position state data
-        trade_data: Signal from LLM (buy/sell/hold)
-        current_price: Current market price
-        csv_data: Historical candle data
-        client: Coinbase RESTClient (required for real trading)
-
-    Returns:
-        list: List of trade results (messages to send to Discord)
-    """
+    """Manage positions based on current state and new signal"""
     results = []
     current_status = positions_data["current_position"]["status"]
     new_signal = trade_data.get("action", "hold") if trade_data else "hold"
 
     # Check if stop-loss or take-profit hit first (checks candle highs/lows)
-    should_close, reason, exit_price = check_stop_target(positions_data, csv_data)
+    should_close, reason, exit_price, orders_to_cancel = check_stop_target(
+        positions_data, csv_data
+    )
     if should_close:
+        # Cancel the other pending order
+        if orders_to_cancel:
+            print(
+                f"   🚫 Cancelling {len(orders_to_cancel)} pending order(s) after {reason}..."
+            )
+            cancel_pending_orders(client, orders_to_cancel)
+
         if current_status == "long":
             result = execute_trade(
                 "close_long", exit_price, positions_data, client=client
