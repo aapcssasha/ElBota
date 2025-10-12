@@ -7,11 +7,12 @@
     "take_profit": null,
     "trade_id": null,
     "action": null,
-    "stop_loss_order_id": "a58a7859-6b54-4874-ae2c-29a6bab92d7e",
-    "take_profit_order_id": "6436c740-e93e-48c2-9e6c-84f622d30499",
-    "unrealized_pnl": null
+    "stop_loss_order_id": null,
+    "take_profit_order_id": null,
+    "unrealized_pnl": null,
+    "entry_order_id": null
   },
-  "last_signal": "sell",
+  "last_signal": "hold",
   "trade_history": [
     {
       "type": "long",
