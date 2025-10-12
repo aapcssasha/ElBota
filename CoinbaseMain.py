@@ -29,8 +29,8 @@ CONTRACT_MULTIPLIER = 0.1  # 0.1 ETH per contract for nano ETH futures
 ORDER_TYPE = "limit"  # "market" or "limit" - market is faster, limit avoids spread
 
 # Stop/Target distance constraints (as percentage from entry)
-MIN_DISTANCE_PERCENT = 0.20  # Minimum 0.10% distance (prevents overly tight stops)
-MAX_DISTANCE_PERCENT = 0.90  # Maximum 0.50% distance (keeps stops reasonable)
+MIN_DISTANCE_PERCENT = 0.30  # Minimum 0.10% distance (prevents overly tight stops)
+MAX_DISTANCE_PERCENT = 1.90  # Maximum 0.50% distance (keeps stops reasonable)
 
 # Derived values
 CRYPTO_LOWER = CRYPTO_SYMBOL.lower()
@@ -309,7 +309,9 @@ def place_stop_loss_order(client, position_type, contracts, stop_price):
                 }
             else:
                 # Order API returned success but no order_id
-                error_msg = order_dict.get("success_response", {}).get("error", "No order_id returned")
+                error_msg = order_dict.get("success_response", {}).get(
+                    "error", "No order_id returned"
+                )
                 print(f"Stop-loss order issue: {error_msg}")
                 return {
                     "success": False,
@@ -319,7 +321,9 @@ def place_stop_loss_order(client, position_type, contracts, stop_price):
         else:
             # Order failed
             error_response = order_dict.get("error_response", {})
-            error_msg = error_response.get("message", error_response.get("error_details", "Unknown error"))
+            error_msg = error_response.get(
+                "message", error_response.get("error_details", "Unknown error")
+            )
             print(f"Stop-loss order failed: {error_msg}")
             return {
                 "success": False,
@@ -330,6 +334,7 @@ def place_stop_loss_order(client, position_type, contracts, stop_price):
     except Exception as e:
         print(f"Stop-loss exception: {e}")
         import traceback
+
         traceback.print_exc()
         return {
             "success": False,
@@ -387,7 +392,9 @@ def place_take_profit_order(client, position_type, contracts, target_price):
                 }
             else:
                 # Order API returned success but no order_id
-                error_msg = order_dict.get("success_response", {}).get("error", "No order_id returned")
+                error_msg = order_dict.get("success_response", {}).get(
+                    "error", "No order_id returned"
+                )
                 print(f"Take-profit order issue: {error_msg}")
                 return {
                     "success": False,
@@ -397,7 +404,9 @@ def place_take_profit_order(client, position_type, contracts, target_price):
         else:
             # Order failed
             error_response = order_dict.get("error_response", {})
-            error_msg = error_response.get("message", error_response.get("error_details", "Unknown error"))
+            error_msg = error_response.get(
+                "message", error_response.get("error_details", "Unknown error")
+            )
             print(f"Take-profit order failed: {error_msg}")
             return {
                 "success": False,
@@ -408,6 +417,7 @@ def place_take_profit_order(client, position_type, contracts, target_price):
     except Exception as e:
         print(f"Take-profit exception: {e}")
         import traceback
+
         traceback.print_exc()
         return {
             "success": False,
@@ -573,7 +583,9 @@ def execute_trade(
                     stop_result.get("order_id")
                 )
             else:
-                print(f"   ⚠️ WARNING: Stop-loss order failed to place - position has NO STOP PROTECTION!")
+                print(
+                    f"   ⚠️ WARNING: Stop-loss order failed to place - position has NO STOP PROTECTION!"
+                )
 
         # Place take-profit order
         if take_profit:
@@ -590,7 +602,9 @@ def execute_trade(
                     tp_result.get("order_id")
                 )
             else:
-                print(f"   ⚠️ WARNING: Take-profit order failed to place - position has NO TARGET!")
+                print(
+                    f"   ⚠️ WARNING: Take-profit order failed to place - position has NO TARGET!"
+                )
 
         # Update positions data with entry info
         positions_data["current_position"]["status"] = position_type
@@ -748,6 +762,8 @@ def manage_positions(positions_data, trade_data, current_price, csv_data, client
                 )
                 results.append(result)
         elif new_signal == "hold":
+            # Cancel any lingering limit orders (e.g., unfilled entry orders from previous runs)
+            cancel_all_open_orders(client)
             results.append(
                 {"success": True, "message": "⚪ No position | Signal: HOLD"}
             )
@@ -1185,8 +1201,8 @@ Current {CRYPTO_SYMBOL} price: ${current_price:,.2f}
    - Use the actual market level as your target
    - THEN verify the ratio falls within acceptable boundaries:
      - **Minimum acceptable ratio: 1:2** (risk $400 to make $200) = 0.5:1 reward-to-risk
-     - **Maximum acceptable ratio: 3:1** (risk $200 to make $600) = 3:1 reward-to-risk
-   - Any ratio between 0.5:1 and 3:1 is acceptable (0.8:1, 1.5:1, 2.3:1, etc.)
+     - **Maximum acceptable ratio: 5:1** (risk $200 to make $1000) = 5:1 reward-to-risk
+   - Any ratio between 0.5:1 and 5:1 is acceptable (0.8:1, 1.5:1, 2.3:1, etc.)
    - Examples:
      - Risk $150, Target $100 away = 0.67:1 ratio ✓ (within range)
      - Risk $100, Target $250 away = 2.5:1 ratio ✓ (within range)
