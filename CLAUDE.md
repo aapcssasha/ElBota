@@ -108,6 +108,7 @@ Automated ETH futures trading bot that:
     "take_profit": 3850.00,
     "trade_id": null,
     "action": "buy|sell|null",
+    "entry_order_id": "xyz789...",
     "stop_loss_order_id": "abc123...",
     "take_profit_order_id": "def456...",
     "unrealized_pnl": 5.50
@@ -133,6 +134,7 @@ Automated ETH futures trading bot that:
 
 **Important:**
 - GitHub Actions auto-commits this file every 15 minutes to persist state between runs
+- `entry_order_id` tracks the entry order ID (for limit orders that may not fill immediately)
 - `stop_loss_order_id` and `take_profit_order_id` track pending orders on Coinbase
 - Many trades have `"note": "Closed externally (desync detected)"` - this means stop/target hit between bot runs
 - `paper_trading_balance` is a legacy field from old paper trading days (now ignored)
@@ -286,14 +288,16 @@ MAX_DISTANCE_PERCENT = 1.90  # Maximum 1.90% distance (keeps stops reasonable)
 
 **Order Management:**
 - Bot places stop-loss and take-profit orders immediately after opening position
-- Order IDs stored in positions.json
+- **Entry, stop-loss, and take-profit order IDs** stored in positions.json
 - Orders automatically cancelled when position closes
-- Stale orders cancelled before new trades
+- Stale orders cancelled before new trades (including unfilled entry limit orders)
 - Missing orders are re-placed if detected during "hold" signal
 
 **Position Desync Detection:**
 - Bot checks actual Coinbase position every run
 - If local state says "long" but API says "none", position closed externally
+- Bot checks if entry order was actually filled before recording P/L
+- **If entry limit order never filled:** Cancels all orders without recording fake P/L
 - Bot calculates realized P/L from filled order prices
 - Records trade with note "Closed externally (desync detected)"
 - This catches stops/targets hit between 15-minute runs
@@ -499,6 +503,12 @@ State machine prevents duplicates and handles direction changes:
 - **Error Handling:** Fixed TypeError when ChatGPT returns dict instead of string
 - **Defensive Parsing:** Added type validation in `parse_llm_response()` and `send_to_discord()`
 - **Configuration:** Adjusted MIN_DISTANCE_PERCENT to 0.30% and MAX_DISTANCE_PERCENT to 1.90%
+- **CRITICAL FIX - Limit Order Management:**
+  - Added `entry_order_id` tracking in positions.json
+  - Fixed bug where unfilled entry limit orders were left active on exchange
+  - Desync detection now cancels all orders (entry + stop + TP)
+  - Bot checks if entry was actually filled before recording P/L
+  - Prevents fake trade history from orders that never executed
 
 ### 🐛 Known Issues
 - `positions.json` still has `paper_trading_balance` field (legacy, ignored - not worth removing)
@@ -613,4 +623,4 @@ All API keys stored as GitHub Secrets (not visible in repo or logs).
 ---
 
 **Maintained By:** Alejandro + Claude Code
-**Version:** 4.1 (Live ETH Futures Trading + Volume Filtering + Enhanced Error Handling)
+**Version:** 4.2 (Live ETH Futures Trading + Limit Order Bug Fix + Volume Filtering)

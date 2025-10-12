@@ -56,6 +56,7 @@ def load_positions():
                 "take_profit": None,
                 "trade_id": None,
                 "action": None,
+                "entry_order_id": None,  # ADDED: Track entry order ID for limit orders
                 "stop_loss_order_id": None,
                 "take_profit_order_id": None,
                 "unrealized_pnl": None,
@@ -568,6 +569,9 @@ def execute_trade(
     if result.get("success") and action in ["open_long", "open_short"]:
         position_type = "long" if action == "open_long" else "short"
 
+        # FIXED: Store entry order ID for limit orders (so we can cancel it later if needed)
+        positions_data["current_position"]["entry_order_id"] = result.get("order_id")
+
         # Place stop-loss order
         if stop_loss:
             print(f"   📍 Placing stop-loss order at ${stop_loss:,.2f}...")
@@ -617,11 +621,12 @@ def execute_trade(
     # ✅ NEW: Cancel pending orders when closing position
     elif result.get("success") and action in ["close_long", "close_short"]:
         # Get order IDs from positions data
+        entry_order_id = positions_data["current_position"].get("entry_order_id")
         stop_order_id = positions_data["current_position"].get("stop_loss_order_id")
         tp_order_id = positions_data["current_position"].get("take_profit_order_id")
 
-        # Cancel any pending orders
-        order_ids = [oid for oid in [stop_order_id, tp_order_id] if oid]
+        # Cancel any pending orders (including entry if limit order never filled)
+        order_ids = [oid for oid in [entry_order_id, stop_order_id, tp_order_id] if oid]
         if order_ids:
             print(f"   🚫 Cancelling {len(order_ids)} pending orders...")
             cancel_pending_orders(client, order_ids)
@@ -672,6 +677,7 @@ def execute_trade(
             "take_profit": None,
             "trade_id": None,
             "action": None,
+            "entry_order_id": None,  # Clear entry order ID
             "stop_loss_order_id": None,  # Make sure these are cleared
             "take_profit_order_id": None,  # Make sure these are cleared
             "unrealized_pnl": None,
@@ -1892,16 +1898,35 @@ if __name__ == "__main__":
                 except Exception as e:
                     print(f"Warning: Could not fetch TP order status: {e}")
 
-            # Cancel any lingering orders
-            order_ids = [oid for oid in [stop_order_id, tp_order_id] if oid]
+            # FIXED: Cancel any lingering orders (including entry order for unfilled limit orders)
+            entry_order_id = positions_data["current_position"].get("entry_order_id")
+            order_ids = [oid for oid in [entry_order_id, stop_order_id, tp_order_id] if oid]
             if order_ids:
-                print(f"   🚫 Cancelling {len(order_ids)} lingering orders...")
+                print(f"   🚫 Cancelling {len(order_ids)} lingering orders (including unfilled entry)...")
                 cancel_pending_orders(client, order_ids)
 
-            # Calculate P/L
+            # FIXED: Check if entry order actually filled before recording P/L
+            entry_was_filled = True  # Assume filled unless we find unfilled entry order
+            if entry_order_id:
+                try:
+                    entry_order_resp = client.get_order(entry_order_id)
+                    entry_dict = (
+                        entry_order_resp.to_dict()
+                        if hasattr(entry_order_resp, "to_dict")
+                        else {}
+                    )
+                    entry_order_info = entry_dict.get("order", {})
+                    entry_status = entry_order_info.get("status", "UNKNOWN")
+                    if entry_status in ["OPEN", "PENDING", "QUEUED"]:
+                        entry_was_filled = False
+                        print(f"   ⚠️ Entry order never filled (status: {entry_status}) - NOT recording P/L")
+                except Exception as e:
+                    print(f"Warning: Could not fetch entry order status: {e}")
+
+            # Calculate P/L only if entry was actually filled
             entry = positions_data["current_position"]["entry_price"]
             multiplier = CONTRACTS_PER_TRADE * CONTRACT_MULTIPLIER
-            if entry is not None:
+            if entry is not None and entry_was_filled:
                 if positions_data["current_position"]["status"] == "long":
                     profit_loss = (exit_price - entry) * multiplier
                     trade_type = "long"
@@ -1934,6 +1959,14 @@ if __name__ == "__main__":
                         "message": f"{emoji} Desync: Position closed {reason} at ${exit_price:,.2f} | P/L: ${profit_loss:+,.2f}",
                     }
                 )
+            elif entry is not None and not entry_was_filled:
+                # Entry order never filled - just report desync without P/L
+                trade_results.append(
+                    {
+                        "success": True,
+                        "message": f"⚠️ Desync: Entry limit order never filled - position cancelled (no P/L)",
+                    }
+                )
         else:
             print("   ✅ No open position on Coinbase")
         # FIXED: Always clear local to match API (but only if no error)
@@ -1942,6 +1975,9 @@ if __name__ == "__main__":
         positions_data["current_position"]["entry_time"] = None
         positions_data["current_position"]["stop_loss"] = None
         positions_data["current_position"]["take_profit"] = None
+        positions_data["current_position"]["entry_order_id"] = None
+        positions_data["current_position"]["stop_loss_order_id"] = None
+        positions_data["current_position"]["take_profit_order_id"] = None
         positions_data["current_position"]["unrealized_pnl"] = None
         if local_has_pos:
             print("   🔄 Local state cleared (desync resolved)")
