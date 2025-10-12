@@ -29,7 +29,7 @@ CONTRACT_MULTIPLIER = 0.1  # 0.1 ETH per contract for nano ETH futures
 ORDER_TYPE = "limit"  # "market" or "limit" - market is faster, limit avoids spread
 
 # Stop/Target distance constraints (as percentage from entry)
-MIN_DISTANCE_PERCENT = 0.40  # Minimum 0.10% distance (prevents overly tight stops)
+MIN_DISTANCE_PERCENT = 0.30  # Minimum 0.10% distance (prevents overly tight stops)
 MAX_DISTANCE_PERCENT = 2.90  # Maximum 0.50% distance (keeps stops reasonable)
 
 # Derived values
