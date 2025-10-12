@@ -29,8 +29,8 @@ CONTRACT_MULTIPLIER = 0.1  # 0.1 ETH per contract for nano ETH futures
 ORDER_TYPE = "limit"  # "market" or "limit" - market is faster, limit avoids spread
 
 # Stop/Target distance constraints (as percentage from entry)
-MIN_DISTANCE_PERCENT = 0.30  # Minimum 0.10% distance (prevents overly tight stops)
-MAX_DISTANCE_PERCENT = 1.90  # Maximum 0.50% distance (keeps stops reasonable)
+MIN_DISTANCE_PERCENT = 0.40  # Minimum 0.10% distance (prevents overly tight stops)
+MAX_DISTANCE_PERCENT = 2.90  # Maximum 0.50% distance (keeps stops reasonable)
 
 # Derived values
 CRYPTO_LOWER = CRYPTO_SYMBOL.lower()
@@ -269,9 +269,13 @@ def place_stop_loss_order(client, position_type, contracts, stop_price):
         client_order_id = str(uuid.uuid4())
         stop_price_rounded = int(round(stop_price))
         if position_type == "long":
-            limit_price_rounded = stop_price_rounded - 2  # $2 buffer for better fill rate
+            limit_price_rounded = (
+                stop_price_rounded - 2
+            )  # $2 buffer for better fill rate
         else:
-            limit_price_rounded = stop_price_rounded + 2  # $2 buffer for better fill rate
+            limit_price_rounded = (
+                stop_price_rounded + 2
+            )  # $2 buffer for better fill rate
 
         # For LONG: sell to close when price drops (stop below entry)
         # For SHORT: buy to close when price rises (stop above entry)
@@ -1404,8 +1408,14 @@ def parse_llm_response(response_text):
                 # Ensure analysis is a string
                 analysis_value = full_json["analysis"]
                 if not isinstance(analysis_value, str):
-                    analysis_value = json.dumps(analysis_value) if isinstance(analysis_value, dict) else str(analysis_value)
-                    print("⚠️ Warning: ChatGPT returned analysis as non-string, converted")
+                    analysis_value = (
+                        json.dumps(analysis_value)
+                        if isinstance(analysis_value, dict)
+                        else str(analysis_value)
+                    )
+                    print(
+                        "⚠️ Warning: ChatGPT returned analysis as non-string, converted"
+                    )
                 return analysis_value, full_json["trade_data"]
             # Check if it has "action" at top level (old flat format)
             elif "action" in full_json:
@@ -1589,7 +1599,9 @@ def send_to_discord(
     # Start with analysis (ensure it's always a string)
     if isinstance(analysis, dict):
         # If analysis is accidentally a dict, convert to JSON string or extract text
-        analysis = json.dumps(analysis, indent=2) if analysis else "Analysis parsing error"
+        analysis = (
+            json.dumps(analysis, indent=2) if analysis else "Analysis parsing error"
+        )
         print("⚠️ Warning: analysis was a dict, converted to string")
     full_description = str(analysis)
 
@@ -1836,10 +1848,14 @@ if __name__ == "__main__":
         local_entry = positions_data["current_position"].get("entry_price")
         if real_position["entry_price"] == 0 and local_entry:
             # Keep local entry price, don't overwrite with 0
-            print(f"   🔄 Preserving local entry price: ${local_entry:,.2f} (API returned 0)")
+            print(
+                f"   🔄 Preserving local entry price: ${local_entry:,.2f} (API returned 0)"
+            )
         else:
             # Update with API entry price (only if non-zero or local is None)
-            positions_data["current_position"]["entry_price"] = real_position["entry_price"]
+            positions_data["current_position"]["entry_price"] = real_position[
+                "entry_price"
+            ]
 
         positions_data["current_position"]["unrealized_pnl"] = real_position[
             "unrealized_pnl"
@@ -1900,9 +1916,13 @@ if __name__ == "__main__":
 
             # FIXED: Cancel any lingering orders (including entry order for unfilled limit orders)
             entry_order_id = positions_data["current_position"].get("entry_order_id")
-            order_ids = [oid for oid in [entry_order_id, stop_order_id, tp_order_id] if oid]
+            order_ids = [
+                oid for oid in [entry_order_id, stop_order_id, tp_order_id] if oid
+            ]
             if order_ids:
-                print(f"   🚫 Cancelling {len(order_ids)} lingering orders (including unfilled entry)...")
+                print(
+                    f"   🚫 Cancelling {len(order_ids)} lingering orders (including unfilled entry)..."
+                )
                 cancel_pending_orders(client, order_ids)
 
             # FIXED: Check if entry order actually filled before recording P/L
@@ -1919,7 +1939,9 @@ if __name__ == "__main__":
                     entry_status = entry_order_info.get("status", "UNKNOWN")
                     if entry_status in ["OPEN", "PENDING", "QUEUED"]:
                         entry_was_filled = False
-                        print(f"   ⚠️ Entry order never filled (status: {entry_status}) - NOT recording P/L")
+                        print(
+                            f"   ⚠️ Entry order never filled (status: {entry_status}) - NOT recording P/L"
+                        )
                 except Exception as e:
                     print(f"Warning: Could not fetch entry order status: {e}")
 
