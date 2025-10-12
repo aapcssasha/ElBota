@@ -12,7 +12,7 @@
     "unrealized_pnl": null,
     "entry_order_id": null
   },
-  "last_signal": "hold",
+  "last_signal": "sell",
   "trade_history": [
     {
       "type": "long",
