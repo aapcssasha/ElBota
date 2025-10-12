@@ -674,12 +674,10 @@ def manage_positions(positions_data, trade_data, current_price, csv_data, client
 
     elif current_status == "long":
         if new_signal == "buy":
-            # Fetch latest pnl
-            real_position = get_current_futures_position(client)
+            # Calculate P/L from entry price and current price
             entry = positions_data["current_position"]["entry_price"]
             multiplier = CONTRACTS_PER_TRADE * CONTRACT_MULTIPLIER
-            fallback_pl = (current_price - entry) * multiplier if entry else 0
-            pl = real_position.get("unrealized_pnl", fallback_pl)
+            pl = (current_price - entry) * multiplier if entry else 0
             positions_data["current_position"]["unrealized_pnl"] = pl
             results.append(
                 {
@@ -758,12 +756,10 @@ def manage_positions(positions_data, trade_data, current_price, csv_data, client
 
     elif current_status == "short":
         if new_signal == "sell":
-            # Fetch latest pnl
-            real_position = get_current_futures_position(client)
+            # Calculate P/L from entry price and current price
             entry = positions_data["current_position"]["entry_price"]
             multiplier = CONTRACTS_PER_TRADE * CONTRACT_MULTIPLIER
-            fallback_pl = (entry - current_price) * multiplier if entry else 0
-            pl = real_position.get("unrealized_pnl", fallback_pl)
+            pl = (entry - current_price) * multiplier if entry else 0
             positions_data["current_position"]["unrealized_pnl"] = pl
             results.append(
                 {
