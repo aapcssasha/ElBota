@@ -1193,80 +1193,160 @@ def analyze_with_llm(csv_data):
     latest_candle = lines[-1].split(",")
     current_price = float(latest_candle[4])  # Close price
 
-    prompt = f"""You are a crypto TA expert specializing in SHORT-TERM scalping with STRONG technical levels. Analyze this {CRYPTO_SYMBOL}/USD 1m OHLCV data from the last {TIMEFRAME_MINUTES} minutes:
+    prompt = f"""You are a crypto TA expert specializing in TREND FOLLOWING ONLY. Your ONLY job is to identify trends and enter on pullbacks. DO NOT take counter-trend trades. DO NOT trade in ranging markets.
+
+Analyze this {CRYPTO_SYMBOL}/USD 1m OHLCV data from the last {TIMEFRAME_MINUTES} minutes:
 {csv_data}
 
 Current {CRYPTO_SYMBOL} price: ${current_price:,.2f}
 
-🎯 ANALYSIS FRAMEWORK - Strategy Priority:
+🎯 **CRITICAL RULE: ONLY TRADE TREND FOLLOWING WITH PULLBACKS**
 
-1. **TREND FOLLOWING WITH PULLBACK ENTRIES** (PRIMARY STRATEGY):
-   - Identify clear trend: higher highs/lows (uptrend) OR lower highs/lows (downtrend)
-   - Enter on pullbacks/bounces: 20-80% retracement of previous swing (flexible range)
-
-   **IDEAL SETUP (highest confidence):**
-   - **For UPTREND (BUY):** Price makes higher high → pulls back to/near previous high
-     * Example: $50 → drops to $25 → rallies to new high $75 → pulls back to ~$50 (near previous high)
-     * This combines: trend following + ~50% pullback + previous structure support
-   - **For DOWNTREND (SELL):** Price makes lower low → bounces to/near previous low
-     * Example: $50 → rallies to $75 → drops to new low $25 → bounces to ~$50 (near previous low)
-     * This combines: trend following + ~50% bounce + previous structure resistance
-
-   **ACCEPTABLE SETUPS (medium confidence):**
-   - Any 20-80% retracement in a clear trend, even if not at previous structure
-   - Closer to 40-60% range = higher confidence
-   - Landing at previous high/low = bonus confidence boost
-
-2. **FALSE BREAKOUT REVERSAL** (SECONDARY - use if detected):
-   - Price breaks strong support/resistance → quickly reverses within 3-5 candles
-   - Trade the reversal direction
-   - Example: Break above resistance → drops back → SELL signal
-   - Example: Break below support → bounces back → BUY signal
-
-3. **SIGNIFICANT SUPPORT/RESISTANCE ZONES** (FALLBACK):
-   - Levels tested 2+ times with price consolidation
-   - High volume zones
-   - Clear pivot points
-   - Use when no clear trend or pullback setup exists
-
-4. **STOP-LOSS PLACEMENT** (CRITICAL - Do this FIRST):
-   - After determining direction (BUY/SELL), find the STRONGEST pivot point from the FULL {TIMEFRAME_MINUTES}-minute data
-   - Look through ALL {TIMEFRAME_MINUTES} candles, not just the last 5-10 candles
-   - For LONG: Find the most significant swing LOW or support zone (tested 2+ times, clear structure, meaningful level)
-   - For SHORT: Find the most significant swing HIGH or resistance zone (tested 2+ times, clear structure, meaningful level)
-   - Place stop just beyond this pivot (5-20 dollars past it)
-   - The stop MUST be at a real structural pivot, not just a random recent candle high/low
-
-   **STOP DISTANCE CONSTRAINTS (CRITICAL):**
-   - Minimum stop distance: {MIN_DISTANCE_PERCENT}% from entry (|entry - stop| / entry ≥ {MIN_DISTANCE_PERCENT / 100})
-   - Maximum stop distance: {MAX_DISTANCE_PERCENT}% from entry (|entry - stop| / entry ≤ {MAX_DISTANCE_PERCENT / 100})
-   - Calculate: (|entry - stop| / entry) × 100 = percentage
-   - If the nearest strong pivot is closer than {MIN_DISTANCE_PERCENT}%, look for the next major pivot
-   - If all pivots are more than {MAX_DISTANCE_PERCENT}% away → use "hold"
-
-5. **TARGET CALCULATION** (Based on market structure FIRST, ratio check SECOND):
-   - **PRIORITY: Find the best target based on market structure**
-   - Calculate risk distance: |entry - stop|
-   - Look for the next significant support/resistance level
-   - Use the actual market level as your target
-   - THEN verify the ratio falls within acceptable boundaries:
-     - **Minimum acceptable ratio: 1:2** (risk $400 to make $200) = 0.5:1 reward-to-risk
-     - **Maximum acceptable ratio: 5:1** (risk $200 to make $1000) = 5:1 reward-to-risk
-   - Any ratio between 0.5:1 and 5:1 is acceptable (0.8:1, 1.5:1, 2.3:1, etc.)
-   - Examples:
-     - Risk $150, Target $100 away = 0.67:1 ratio ✓ (within range)
-     - Risk $100, Target $250 away = 2.5:1 ratio ✓ (within range)
-     - Risk $200, Target $700 away = 3.5:1 ratio ✗ (exceeds max, use "hold")
-   - If no significant level exists within ratio range → use "hold"
+**⚠️ IF NO CLEAR TREND → IMMEDIATELY USE "hold" (DO NOT TRADE)**
 
 ---
 
+## STEP 1: IDENTIFY THE TREND (MOST IMPORTANT!)
+
+**UPTREND DEFINITION (for BUY signals):**
+- Price makes higher highs AND higher lows
+- Each swing high is above the previous swing high
+- Each swing low is above the previous swing low
+- Example: $4000 → $4100 (swing up), pullback to $4050 (higher low), → $4150 (higher high), pullback to $4100 (higher low)
+
+**DOWNTREND DEFINITION (for SELL signals):**
+- Price makes lower highs AND lower lows
+- Each swing high is below the previous swing high
+- Each swing low is below the previous swing low
+- Example: $4000 → $3900 (swing down), bounce to $3950 (lower high), → $3850 (lower low), bounce to $3900 (lower high)
+
+**NO TREND / RANGING:**
+- Price moving sideways without clear direction
+- No higher highs/lows OR lower highs/lows
+- Choppy price action with no structure
+- **ACTION: USE "hold" - DO NOT TRADE**
+
+**🚫 NEVER TRADE COUNTER-TREND:**
+- If uptrend exists, NEVER take SELL signals
+- If downtrend exists, NEVER take BUY signals
+- If no trend, NEVER trade at all
+
+---
+
+## STEP 2: CHECK FOR PULLBACK ENTRY (20-80% Retracement)
+
+**For UPTREND (BUY):**
+- Wait for price to pull back from the last swing high
+- Pullback should be 20-80% of the last upward swing
+- Entry anywhere in this range is valid
+- Example: Swing from $4100 to $4150 ($50 range) → pullback to $4110-$4140 = valid entry zone
+
+**For DOWNTREND (SELL):**
+- Wait for price to bounce from the last swing low
+- Bounce should be 20-80% of the last downward swing
+- Entry anywhere in this range is valid
+- Example: Swing from $4100 to $4050 ($50 range) → bounce to $4060-$4090 = valid entry zone
+
+**Perfect Example from User:**
+- Price at $4000 → $4100 (uptrend starting)
+- Pullback to $4050 (50% retracement) ✓
+- Swing to $4150 (higher high confirmed) ✓
+- Pullback to $4100 (current price) ✓
+- **ENTRY HERE at $4100** (50% of $4100-$4150 swing)
+- Stop: $4050 (last swing low)
+- Target: $4160+ (above last high of $4150)
+- This is a PERFECT trend-following setup!
+
+**IF NO PULLBACK:**
+- Price still making new highs/lows without retracement
+- Wait for pullback (use "hold")
+- DO NOT chase momentum
+
+---
+
+## STEP 3: STOP-LOSS PLACEMENT (Must be at swing point in trend direction)
+
+**For UPTREND (BUY):**
+- Find the last significant swing LOW in the uptrend
+- This is where the last pullback ended (the support that held)
+- Place stop 5-20 dollars BELOW this swing low
+- Example: Last swing low at $4050 → Stop at $4045
+
+**For DOWNTREND (SELL):**
+- Find the last significant swing HIGH in the downtrend
+- This is where the last bounce ended (the resistance that held)
+- Place stop 5-20 dollars ABOVE this swing high
+- Example: Last swing high at $3950 → Stop at $3955
+
+**STOP DISTANCE CONSTRAINTS:**
+- Minimum stop distance: {MIN_DISTANCE_PERCENT}% from entry
+- Maximum stop distance: {MAX_DISTANCE_PERCENT}% from entry
+- Calculate: (|entry - stop| / entry) × 100 = percentage
+- If stop doesn't meet constraints → use "hold" (trend not clear enough)
+
+---
+
+## STEP 4: TARGET CALCULATION (Next structure level in trend direction)
+
+**For UPTREND (BUY):**
+- Find the next resistance level ABOVE entry price
+- Look for previous swing highs in the trend
+- Target should be slightly above the last swing high (to ensure breakout)
+- Example: Last high was $4150 → Target at $4160 (a bit above for confirmation)
+
+**For DOWNTREND (SELL):**
+- Find the next support level BELOW entry price
+- Look for previous swing lows in the trend
+- Target should be slightly below the last swing low (to ensure breakdown)
+- Example: Last low was $3850 → Target at $3840 (a bit below for confirmation)
+
+**TARGET CONSTRAINTS:**
+- Risk-reward ratio must be between 0.5:1 and 3:1
+- Calculate: (|entry - target| / |entry - stop|)
+- If ratio outside range → use "hold" (not worth the risk)
+
+---
+
+## DECISION MATRIX
+
+**Use BUY signal ONLY if:**
+1. ✓ Clear uptrend identified (higher highs + higher lows)
+2. ✓ Currently in 20-80% pullback zone
+3. ✓ Stop at last swing low meets distance constraints
+4. ✓ Target at next resistance meets R:R ratio
+5. ✓ You would NOT take a SELL signal here
+
+**Use SELL signal ONLY if:**
+1. ✓ Clear downtrend identified (lower highs + lower lows)
+2. ✓ Currently in 20-80% bounce zone
+3. ✓ Stop at last swing high meets distance constraints
+4. ✓ Target at next support meets R:R ratio
+5. ✓ You would NOT take a BUY signal here
+
+**Use HOLD signal if:**
+- ❌ No clear trend (ranging/choppy market)
+- ❌ Trend exists but no pullback yet
+- ❌ Pullback too deep (>80% retracement = trend broken)
+- ❌ Pullback too shallow (<20% = momentum still too strong)
+- ❌ Stop distance doesn't meet constraints
+- ❌ Target R:R ratio outside acceptable range
+- ❌ ANY doubt about trend direction
+
+---
+
+## OUTPUT FORMAT
+
 Provide TWO outputs:
 
-1. ANALYSIS (for traders):
-Analyze trend and pullback structure (PRIMARY), check for false breakouts (SECONDARY), identify support/resistance zones. Give clear BUY/SELL/HOLD recommendation with reasoning. IMPORTANT: Mention which pivot point you're using for the stop-loss and why it's significant (e.g., "Stop below $121,880 pivot - tested 3 times as support").
+1. **ANALYSIS** (for traders):
+- State if UPTREND, DOWNTREND, or NO TREND
+- If trend: describe the swing structure (where are the highs/lows)
+- If pullback: state percentage retracement and entry zone
+- If no trend: explain why (ranging, choppy, unclear structure)
+- Give clear BUY/SELL/HOLD recommendation
+- Mention stop placement: "Stop at $X (last swing low/high from trend)"
 
-2. TRADE_DATA (for execution):
+2. **TRADE_DATA** (for execution):
 {{
   "action": "buy" or "sell" or "hold",
   "entry_price": {current_price},
@@ -1277,100 +1357,58 @@ Analyze trend and pullback structure (PRIMARY), check for false breakouts (SECON
 
 ⚠️ CRITICAL: Output PURE JSON ONLY. NO COMMENTS. Do NOT add // text after values.
 
-STEP-BY-STEP PROCESS:
+---
 
-Step 1: Determine trade direction (BUY/SELL/HOLD) based on patterns above
+## CONFIDENCE SCORING
 
-Step 2: FIND THE STOP-LOSS (Most important step!)
-For BUY (LONG):
-  * Look through ALL {TIMEFRAME_MINUTES} minutes of data for the strongest swing LOW or support pivot
-  * This could be: a level tested 2+ times, a sharp bounce point, consolidation zone
-  * DO NOT just use the low of the last few candles - find SIGNIFICANT pivots
-  * Place stop 5-20 dollars BELOW this pivot
-  * stop_loss MUST BE BELOW entry_price
-  * CHECK: Is |entry - stop| / entry between {MIN_DISTANCE_PERCENT}% and {MAX_DISTANCE_PERCENT}%? If not, find different pivot
+**75-100% (Very High):**
+- Perfect trend with clear structure
+- Pullback in 40-60% zone (ideal)
+- Stop at strong swing point
+- Multiple confirmations
 
-For SELL (SHORT):
-  * Look through ALL {TIMEFRAME_MINUTES} minutes of data for the strongest swing HIGH or resistance pivot
-  * This could be: a level tested 2+ times, a sharp rejection point, consolidation zone
-  * DO NOT just use the high of the last few candles - find SIGNIFICANT pivots
-  * Place stop 5-20 dollars ABOVE this pivot
-  * stop_loss MUST BE ABOVE entry_price
-  * CHECK: Is |entry - stop| / entry between {MIN_DISTANCE_PERCENT}% and {MAX_DISTANCE_PERCENT}%? If not, find different pivot
+**50-75% (High):**
+- Clear trend with good structure
+- Pullback in 20-80% zone
+- Stop at valid swing point
+- Target at clear level
 
-Step 3: CALCULATE THE TARGET (Market structure is PRIORITY, ratio is just a check)
-  * Calculate risk = |entry_price - stop_loss|
-  * Look for the next significant support/resistance level (tested 2+ times, consolidation, etc.)
-  * For LONG: Find the next resistance level above entry
-  * For SHORT: Find the next support level below entry
-  * Use the actual market level as your target
-  * THEN check if ratio falls within range:
-    - Minimum: 0.5:1 (target can be 0.5× the risk distance)
-    - Maximum: 3:1 (target can be up to 3× the risk distance)
-  * Any ratio between 0.5:1 and 3:1 is valid (0.67:1, 1.2:1, 2.5:1, etc.)
-  * If no significant level exists within this ratio range, use "hold"
+**25-50% (Medium):**
+- Trend exists but less clear
+- Pullback in acceptable zone
+- Some structure uncertainty
 
-Example for LONG (good ratio):
-  * Entry: $4,300
-  * Looking at {TIMEFRAME_MINUTES}min data, find strong pivot low at $4,288 (tested 3 times)
-  * Stop: $4,285 (below pivot)
-  * Risk: $4,300 - $4,285 = $15 → 0.35% ✓ (between {MIN_DISTANCE_PERCENT}%-{MAX_DISTANCE_PERCENT}%)
-  * Looking for resistance: Strong resistance at $4,315 (consolidation zone)
-  * Target: $4,315 (distance: $15 → 0.35%, ratio: 1:1 ✓) - Within 0.5:1 to 3:1 range
+**0-25% (Low):**
+- Weak or unclear trend
+- Should probably use "hold"
 
-Example for SHORT (acceptable ratio):
-  * Entry: $4,300
-  * Looking at {TIMEFRAME_MINUTES}min data, find strong pivot high at $4,312 (tested 3 times)
-  * Stop: $4,315 (above pivot)
-  * Risk: $4,315 - $4,300 = $15 → 0.35% ✓ (between {MIN_DISTANCE_PERCENT}%-{MAX_DISTANCE_PERCENT}%)
-  * Looking for support: Strong support at $4,280 (tested 2x as support)
-  * Target: $4,280 (distance: $20 → 0.47%, ratio: 1.33:1 ✓) - Within range
+**IF CONFIDENCE < 50% → USE "hold"**
 
-Example for LONG (great ratio):
-  * Entry: $4,300
-  * Strong pivot low at $4,280 → Stop: $4,278
-  * Risk: $22 → 0.51% ✗ (exceeds {MAX_DISTANCE_PERCENT}% max)
-  * Result: Try next pivot at $4,288 → Stop: $4,285 → 0.35% ✓
-  * Next resistance at $4,320 (major level)
-  * Target: $4,320 (distance: $20 → 0.47%, ratio: 1.33:1 ✓)
+---
 
-Example of REJECTED trade (stop too tight):
-  * Entry: $4,300, nearest pivot: $4,298
-  * Stop would be: $4,297
-  * Risk: $3 → 0.07% ✗ (less than {MIN_DISTANCE_PERCENT}% minimum)
-  * Result: Find a different pivot OR use "hold"
+## VALIDATION CHECKLIST (MUST PASS ALL)
 
-FINAL VALIDATION (Check ALL of these):
-- BUY: stop_loss < entry_price < take_profit ✓
-- SELL: take_profit < entry_price < stop_loss ✓
-- Stop distance: {MIN_DISTANCE_PERCENT}% ≤ |entry - stop| / entry ≤ {MAX_DISTANCE_PERCENT}% ✓
-- Risk-reward ratio: 0.5 ≤ ratio ≤ 3.0 (any value in range is acceptable) ✓
-- Stop is at a SIGNIFICANT pivot from the full {TIMEFRAME_MINUTES}min data (not a random recent candle) ✓
-- Target is at a real support/resistance level (not calculated artificially) ✓
-- If ANY check fails → use "hold"
+For BUY:
+- [ ] Stop < Entry < Target (direction check)
+- [ ] Stop distance: {MIN_DISTANCE_PERCENT}% to {MAX_DISTANCE_PERCENT}%
+- [ ] Target R:R ratio: 0.5:1 to 3:1
+- [ ] Stop at last swing LOW in uptrend
+- [ ] Target above last swing HIGH
+- [ ] Clear uptrend with higher highs + higher lows
+- [ ] Currently in 20-80% pullback zone
 
-NOTE: Ratio range is VERY flexible:
-- 0.5:1 = acceptable (risk $400 to make $200, not ideal but valid)
-- 1:1 = neutral (risk $200 to make $200)
-- 2:1 = good (risk $100 to make $200)
-- 3:1 = excellent (risk $100 to make $300)
-Priority is finding real market levels, THEN checking ratio is in range.
+For SELL:
+- [ ] Target < Entry < Stop (direction check)
+- [ ] Stop distance: {MIN_DISTANCE_PERCENT}% to {MAX_DISTANCE_PERCENT}%
+- [ ] Target R:R ratio: 0.5:1 to 3:1
+- [ ] Stop at last swing HIGH in downtrend
+- [ ] Target below last swing LOW
+- [ ] Clear downtrend with lower highs + lower lows
+- [ ] Currently in 20-80% bounce zone
 
-For "hold": set stop_loss and take_profit to null
+**IF ANY CHECK FAILS → USE "hold"**
 
-Confidence levels:
-- >70: Strong pattern (ideal trend pullback at structure, false breakout, strong zones)
-- 50-70: Moderate setup (acceptable trend pullback, decent structure)
-- <50: Weak/unclear → probably use "hold"
-
-DOUBLE-CHECK before responding:
-- BUY: Is stop < entry < target? ✓
-- SELL: Is target < entry < stop? ✓
-- Is stop placed at a SIGNIFICANT pivot from the FULL {TIMEFRAME_MINUTES}min data (not just last few candles)? ✓
-- Is stop distance between {MIN_DISTANCE_PERCENT}% and {MAX_DISTANCE_PERCENT}% from entry? ✓
-- Did I place target at an actual support/resistance level (not artificially calculated)? ✓
-- Is risk-reward ratio between 0.5:1 and 3:1? ✓
-- Did I prioritize market structure FIRST, then check ratio SECOND? ✓"""
+For "hold": set stop_loss and take_profit to null"""
 
     response = client.chat.completions.create(
         model="gpt-4o-mini",

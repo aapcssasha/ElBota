@@ -359,36 +359,44 @@ MAX_DISTANCE_PERCENT = 1.90  # Maximum 1.90% distance (keeps stops reasonable)
 
 **Trading Framework:**
 
-1. **Trend Following with Pullback Entries** (PRIMARY)
-   - Identify clear trend: higher highs/lows (uptrend) OR lower highs/lows (downtrend)
-   - Enter on pullbacks/bounces: 20-80% retracement of previous swing
+**⚠️ TREND FOLLOWING ONLY - NO COUNTER-TREND TRADES**
 
-2. **False Breakout Reversal** (SECONDARY)
-   - Price breaks strong level then quickly reverses (3-5 candles)
-   - Trade the reversal direction
+1. **Step 1: Identify Trend** (MANDATORY)
+   - **UPTREND:** Higher highs AND higher lows
+   - **DOWNTREND:** Lower highs AND lower lows
+   - **NO TREND:** Ranging/choppy → USE HOLD
+   - If no clear trend → DO NOT TRADE
 
-3. **Significant Support/Resistance Zones** (FALLBACK)
-   - Levels tested 2+ times with price consolidation
-   - High volume zones
-   - Clear pivot points
+2. **Step 2: Wait for Pullback Entry** (20-80% Retracement)
+   - **UPTREND:** Enter on pullback (20-80% of last swing)
+   - **DOWNTREND:** Enter on bounce (20-80% of last swing)
+   - Example: $4000 → $4100 → pullback to $4050 → $4150 → pullback to $4100 = PERFECT ENTRY
+   - Outside 20-80% range → USE HOLD
 
-4. **Stop-Loss Placement** (CRITICAL)
-   - Find STRONGEST pivot from FULL 120-minute data
-   - For LONG: Most significant swing low or support
-   - For SHORT: Most significant swing high or resistance
-   - Place stop 5-20 dollars beyond this pivot
+3. **Step 3: Stop-Loss at Last Swing Point** (CRITICAL)
+   - **UPTREND:** Stop at last swing LOW (5-20 dollars below)
+   - **DOWNTREND:** Stop at last swing HIGH (5-20 dollars above)
+   - Example: Uptrend with last low at $4050 → Stop at $4045
    - **Stop Distance Constraints:**
-     - Minimum: 0.30% from entry (prevents overly tight stops)
-     - Maximum: 1.90% from entry (keeps stops reasonable)
+     - Minimum: 0.40% from entry
+     - Maximum: 2.90% from entry
+   - Outside range → USE HOLD
 
-5. **Target Calculation** (Market structure FIRST, ratio check SECOND)
-   - **PRIORITY:** Find best target based on market structure
-   - Look for next significant support/resistance level
-   - Use the actual market level as target
-   - **THEN verify ratio falls within boundaries:**
-     - Minimum: 0.5:1 (risk $400 to make $200) - aka 1:2 ratio
+4. **Step 4: Target at Next Structure Level**
+   - **UPTREND:** Target slightly above last swing HIGH
+   - **DOWNTREND:** Target slightly below last swing LOW
+   - Example: Last high $4150 → Target $4160
+   - **Risk-Reward Ratio:**
+     - Minimum: 0.5:1 (risk $400 to make $200)
      - Maximum: 3:1 (risk $200 to make $600)
-   - Any ratio between 0.5:1 and 3:1 is acceptable
+   - Outside range → USE HOLD
+
+**CRITICAL RULES:**
+- ✅ ONLY trade WITH the trend
+- ❌ NEVER trade counter-trend
+- ❌ NEVER trade without clear trend
+- ❌ NEVER trade outside 20-80% pullback zone
+- If ANY doubt → USE HOLD
 
 ### Response Parsing & Error Handling
 
@@ -499,10 +507,19 @@ State machine prevents duplicates and handles direction changes:
 - [x] Defensive response parsing (handles malformed ChatGPT responses)
 
 ### 🔧 Recent Improvements (2025-10-12)
+- **MAJOR: Prompt Rewrite - Trend Following Only:**
+  - Removed false breakout and support/resistance strategies (causing confusion)
+  - ChatGPT now ONLY trades trend following with pullbacks
+  - Must identify clear trend first (higher highs/lows OR lower highs/lows)
+  - Only enters on 20-80% pullbacks/bounces
+  - NEVER trades counter-trend or in ranging markets
+  - Stop MUST be at last swing point in trend direction
+  - Target MUST be at next swing point (slightly beyond)
+  - Uses HOLD if ANY doubt about trend
 - **Volume Filtering:** Added `check_volume_conditions()` to filter low-volume periods
 - **Error Handling:** Fixed TypeError when ChatGPT returns dict instead of string
 - **Defensive Parsing:** Added type validation in `parse_llm_response()` and `send_to_discord()`
-- **Configuration:** Adjusted MIN_DISTANCE_PERCENT to 0.30% and MAX_DISTANCE_PERCENT to 1.90%
+- **Configuration:** Adjusted MIN_DISTANCE_PERCENT to 0.40% and MAX_DISTANCE_PERCENT to 2.90%
 - **CRITICAL FIX - Limit Order Management:**
   - Added `entry_order_id` tracking in positions.json
   - Fixed bug where unfilled entry limit orders were left active on exchange
@@ -623,4 +640,4 @@ All API keys stored as GitHub Secrets (not visible in repo or logs).
 ---
 
 **Maintained By:** Alejandro + Claude Code
-**Version:** 4.2 (Live ETH Futures Trading + Limit Order Bug Fix + Volume Filtering)
+**Version:** 4.3 (Trend Following Only + Limit Order Bug Fix + Volume Filtering)
