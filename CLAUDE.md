@@ -2,7 +2,7 @@
 
 **Repository:** https://github.com/aapcssasha/ElBota (Public)
 **Status:** 💰 **LIVE TRADING** - Real money on Coinbase Futures
-**Last Updated:** 2025-10-11
+**Last Updated:** 2025-10-12
 
 ---
 
@@ -13,12 +13,13 @@ Automated ETH futures trading bot that:
 2. Syncs local state with actual Coinbase position (detects desyncs when stops/targets hit externally)
 3. Sends data to ChatGPT (gpt-4o-mini) for technical analysis
 4. Gets trading recommendation (BUY/SELL/HOLD) with entry, stop-loss, and take-profit levels
-5. Executes **REAL futures trades** on Coinbase (with real money!)
-6. Places stop-loss and take-profit orders automatically
-7. Manages positions (tracks opens/closes, monitors P/L, cancels stale orders)
-8. Generates candlestick charts with trading levels
-9. Sends analysis + chart to Discord webhook
-10. Runs automatically via GitHub Actions every 15 minutes
+5. **Validates volume conditions** before opening trades (filters low-volume periods)
+6. Executes **REAL futures trades** on Coinbase (with real money!)
+7. Places stop-loss and take-profit orders automatically
+8. Manages positions (tracks opens/closes, monitors P/L, cancels stale orders)
+9. Generates candlestick charts with trading levels
+10. Sends analysis + chart to Discord webhook
+11. Runs automatically via GitHub Actions every 15 minutes
 
 ---
 
@@ -48,13 +49,15 @@ Automated ETH futures trading bot that:
 5. GET SIGNAL
    └─> ChatGPT analyzes data
    └─> Returns: action (buy/sell/hold), entry, stop, target, confidence
+   └─> Defensive parsing handles unexpected response formats
 
-6. MANAGE POSITION
+6. VALIDATE & MANAGE POSITION
    └─> Validate trade levels (stop distance, R:R ratio, direction)
-   └─> None + BUY → Open Long + place stop/TP orders
-   └─> None + SELL → Open Short + place stop/TP orders
+   └─> Check volume conditions (filters low-volume periods)
+   └─> None + BUY (valid) → Open Long + place stop/TP orders
+   └─> None + SELL (valid) → Open Short + place stop/TP orders
    └─> Long + BUY → Hold (update stop/TP if missing)
-   └─> Long + SELL → Close Long, Open Short
+   └─> Long + SELL → Close Long, Open Short (if valid)
    └─> Long + HOLD → Close Long
    └─> Short logic (reversed)
 
@@ -65,7 +68,7 @@ Automated ETH futures trading bot that:
    └─> "INVALID TRADE" overlay if validation failed
 
 8. SEND TO DISCORD
-   └─> Analysis text
+   └─> Analysis text (with defensive type checking)
    └─> Chart image
    └─> Position updates
    └─> Real account balance
@@ -201,10 +204,10 @@ git push
 
 ## 📊 Performance Metrics
 
-### Current Stats (as of 2025-10-11)
-- **Total Trades:** 16 (8W / 8L)
-- **Win Rate:** 50%
-- **Avg W:L Ratio:** Being tracked from trade history
+### Current Stats (as of 2025-10-12)
+- **Total Trades:** 24 (12W / 12L)
+- **Win Rate:** 50.0%
+- **Avg W:L Ratio:** 8.06:1 (avg win: $19.76, avg loss: $2.45)
 - **Many trades closed externally** - Stops/targets hit between bot runs (this is good!)
 
 ### Average Win/Loss Ratio (Avg W:L)
@@ -231,9 +234,26 @@ git push
 
 ### Futures Trading Configuration
 
+**Location:** Top of `CoinbaseMain.py`
+
+```python
+FUTURES_PRODUCT_ID = "ET-31OCT25-CDE"  # ETH Futures (Oct 31, 2025)
+CRYPTO_SYMBOL = "ETH"                   # For display purposes
+TIMEFRAME_MINUTES = 120                 # How many minutes of data to fetch
+CONTRACTS_PER_TRADE = 1                 # Number of contracts to trade (0.1 ETH each)
+CONTRACT_MULTIPLIER = 0.1               # 0.1 ETH per contract for nano ETH futures
+
+# Order execution settings
+ORDER_TYPE = "limit"  # "market" or "limit" - market is faster, limit avoids spread
+
+# Stop/Target distance constraints (as percentage from entry)
+MIN_DISTANCE_PERCENT = 0.30  # Minimum 0.30% distance (prevents overly tight stops)
+MAX_DISTANCE_PERCENT = 1.90  # Maximum 1.90% distance (keeps stops reasonable)
+```
+
 **Product:** `ET-31OCT25-CDE` (ETH Futures, expires Oct 31, 2025)
 **Contract Size:** 0.1 ETH per contract
-**Contracts Per Trade:** 1 (configurable in `CoinbaseMain.py`)
+**Contracts Per Trade:** 1 (configurable)
 **Leverage:** Depends on Coinbase account settings (typically 5-10x)
 **Data Timeframe:** 120 minutes of 1-minute candles
 
@@ -242,12 +262,26 @@ git push
 - ETH at $4,000 = $400 notional value per contract
 - With 10x leverage, requires ~$40 margin
 
+### Order Type Configuration
+
+**ORDER_TYPE = "limit"** (Current setting)
+- **Limit Orders:** Placed at current market price
+- Avoids spread/slippage
+- May not fill immediately if market moves away
+- Better for execution quality
+
+**ORDER_TYPE = "market"** (Alternative)
+- Executes immediately at best available price
+- Guaranteed fill (for liquid markets)
+- May have slippage on large orders
+
 ### Real Trading Integration
 
 **API:** Coinbase Advanced Trade API via `coinbase-advanced-py` SDK
+
 **Order Types:**
-- **Market orders** for entry (immediate fill)
-- **Stop-limit orders** for stop-loss (trigger + limit)
+- **Limit/Market orders** for entry (configurable via ORDER_TYPE)
+- **Stop-limit orders** for stop-loss (trigger + limit with $2 buffer)
 - **Limit orders** for take-profit
 
 **Order Management:**
@@ -255,6 +289,7 @@ git push
 - Order IDs stored in positions.json
 - Orders automatically cancelled when position closes
 - Stale orders cancelled before new trades
+- Missing orders are re-placed if detected during "hold" signal
 
 **Position Desync Detection:**
 - Bot checks actual Coinbase position every run
@@ -262,6 +297,29 @@ git push
 - Bot calculates realized P/L from filled order prices
 - Records trade with note "Closed externally (desync detected)"
 - This catches stops/targets hit between 15-minute runs
+- Preserves local entry price if API returns 0 (common API issue)
+
+### Volume Filtering (Added 2025-10-12)
+
+**Purpose:** Prevents trading during low-volume periods (low liquidity, wide spreads)
+
+**Function:** `check_volume_conditions(csv_data)`
+
+**Conditions (BOTH must pass):**
+1. **Average volume** of last 10 candles > 100
+2. **At least 7 out of 10 candles** must have volume > 20
+
+**Behavior:**
+- Checked BEFORE opening any new position
+- If conditions fail, trade is rejected with message:
+  - `"⚠️ Volume too low to open LONG: avg volume 18.9 ≤ 100 AND only 3/10 candles > 20 volume (need 7+)"`
+- Does NOT affect existing positions (only new entries)
+- Applies to both LONG and SHORT signals
+
+**Why it matters:**
+- Prevents slippage during thin markets
+- Improves fill quality
+- Reduces risk of getting trapped in illiquid conditions
 
 ### Stop-Loss and Take-Profit Detection
 
@@ -316,8 +374,8 @@ git push
    - For SHORT: Most significant swing high or resistance
    - Place stop 5-20 dollars beyond this pivot
    - **Stop Distance Constraints:**
-     - Minimum: 0.10% from entry (prevents overly tight stops)
-     - Maximum: 0.50% from entry (keeps stops reasonable)
+     - Minimum: 0.30% from entry (prevents overly tight stops)
+     - Maximum: 1.90% from entry (keeps stops reasonable)
 
 5. **Target Calculation** (Market structure FIRST, ratio check SECOND)
    - **PRIORITY:** Find best target based on market structure
@@ -328,6 +386,21 @@ git push
      - Maximum: 3:1 (risk $200 to make $600)
    - Any ratio between 0.5:1 and 3:1 is acceptable
 
+### Response Parsing & Error Handling
+
+**Defensive Parsing (Added 2025-10-12):**
+- `parse_llm_response()` validates that `analysis` is always a string
+- If ChatGPT returns unexpected format (e.g., dict instead of string), auto-converts
+- `send_to_discord()` has additional type checking as fallback
+- Logs warnings when unexpected formats detected
+- Prevents `TypeError: unsupported operand type(s) for +=: 'dict' and 'str'`
+- If parsing completely fails, defaults to HOLD signal with 0% confidence
+
+**Why it matters:**
+- ChatGPT occasionally returns malformed responses
+- Bot continues running instead of crashing
+- GitHub Actions workflow remains stable
+
 ### Trade Level Validation
 
 Before executing any trade, the bot validates ALL of these criteria:
@@ -337,19 +410,24 @@ Before executing any trade, the bot validates ALL of these criteria:
    - For SHORT trades: take_profit < entry_price < stop_loss
 
 2. **Stop Distance Constraints:**
-   - Minimum: 0.10% from entry
-   - Maximum: 0.50% from entry
-   - Example rejection: Stop 0.05% away → "Stop too tight: 0.05% (minimum 0.10%)"
+   - Minimum: 0.30% from entry
+   - Maximum: 1.90% from entry
+   - Example rejection: Stop 0.05% away → "Stop too tight: 0.05% (minimum 0.30%)"
 
 3. **Target Distance Constraints:**
-   - Minimum: 0.10% from entry
-   - Maximum: 0.50% from entry
+   - Minimum: 0.30% from entry
+   - Maximum: 1.90% from entry
 
 4. **Risk-Reward Ratio:**
    - Minimum: 0.5:1 (risk $400 to make $200) - aka 1:2 ratio
    - Maximum: 3:1 (risk $200 to make $600)
    - Any ratio in range is valid: 0.65:1, 1.2:1, 2.5:1, etc.
    - Example rejection: 0.3:1 ratio → "Risk-reward too low: 0.30:1 (minimum 0.5:1)"
+
+5. **Volume Conditions:**
+   - Average volume of last 10 candles > 100
+   - At least 7 out of 10 candles with volume > 20
+   - Example rejection: `"Volume too low to open LONG: avg volume 18.9 ≤ 100 AND only 3/10 candles > 20 volume (need 7+)"`
 
 If ANY validation fails:
 - Trade is rejected and not executed
@@ -363,27 +441,32 @@ If ANY validation fails:
 
 State machine prevents duplicates and handles direction changes:
 
-| Current Status | New Signal | Validation | Action |
-|----------------|------------|------------|--------|
-| None | BUY | Valid | Open Long + place stop/TP orders |
-| None | BUY | Invalid | Do nothing (show error) |
-| None | SELL | Valid | Open Short + place stop/TP orders |
-| None | SELL | Invalid | Do nothing (show error) |
-| None | HOLD | N/A | Do nothing |
-| Long | BUY | N/A | Hold (place missing stop/TP if needed) |
-| Long | SELL | Valid | Close Long → Cancel orders → Open Short |
-| Long | SELL | Invalid | Close Long → No position |
-| Long | HOLD | N/A | Close Long → Cancel orders |
-| Short | SELL | N/A | Hold (place missing stop/TP if needed) |
-| Short | BUY | Valid | Close Short → Cancel orders → Open Long |
-| Short | BUY | Invalid | Close Short → No position |
-| Short | HOLD | N/A | Close Short → Cancel orders |
+| Current Status | New Signal | Validation | Volume Check | Action |
+|----------------|------------|------------|--------------|--------|
+| None | BUY | Valid | Pass | Open Long + place stop/TP orders |
+| None | BUY | Valid | Fail | Do nothing (show volume error) |
+| None | BUY | Invalid | N/A | Do nothing (show validation error) |
+| None | SELL | Valid | Pass | Open Short + place stop/TP orders |
+| None | SELL | Valid | Fail | Do nothing (show volume error) |
+| None | SELL | Invalid | N/A | Do nothing (show validation error) |
+| None | HOLD | N/A | N/A | Do nothing |
+| Long | BUY | N/A | N/A | Hold (place missing stop/TP if needed) |
+| Long | SELL | Valid | Pass | Close Long → Cancel orders → Open Short |
+| Long | SELL | Valid | Fail | Close Long → No position |
+| Long | SELL | Invalid | N/A | Close Long → No position |
+| Long | HOLD | N/A | N/A | Close Long → Cancel orders |
+| Short | SELL | N/A | N/A | Hold (place missing stop/TP if needed) |
+| Short | BUY | Valid | Pass | Close Short → Cancel orders → Open Long |
+| Short | BUY | Valid | Fail | Close Short → No position |
+| Short | BUY | Invalid | N/A | Close Short → No position |
+| Short | HOLD | N/A | N/A | Close Short → Cancel orders |
 
 **Key behavior:**
 - Bot automatically places stop-loss and take-profit orders after opening position
 - If holding and orders are missing (desync), bot re-places them
 - When closing position, bot cancels all pending orders
 - All stale orders cancelled before opening new position
+- Volume check only applies to NEW positions (not closing existing ones)
 
 ---
 
@@ -393,24 +476,34 @@ State machine prevents duplicates and handles direction changes:
 - **Status:** Bot is actively trading with real money on Coinbase
 - **Product:** ET-31OCT25-CDE (ETH Futures)
 - **Automation:** GitHub Actions runs every 15 minutes
-- **Trading Stats:** 16 trades (8W/8L, 50% win rate)
+- **Trading Stats:** 24 trades (12W/12L, 50% win rate, 8.06:1 avg W:L)
+- **Account Balance:** ~$192 (as of last check)
 
 ### 🎯 What's Working
 - [x] Real Coinbase API integration
-- [x] Market order execution (entries)
+- [x] Limit/Market order execution (configurable)
 - [x] Stop-loss and take-profit order placement
-- [x] Position desync detection
+- [x] Position desync detection & auto-recovery
 - [x] Order cancellation management
 - [x] Real-time balance tracking
-- [x] ChatGPT analysis integration
+- [x] ChatGPT analysis integration with error handling
 - [x] Discord notifications with charts
-- [x] GitHub Actions automation
-- [x] Trade level validation
-- [x] Performance metrics tracking
+- [x] GitHub Actions automation (15-min intervals)
+- [x] Trade level validation (stop distance, R:R, direction)
+- [x] Volume filtering (prevents low-volume trades)
+- [x] Performance metrics tracking (Avg W:L, Win Rate)
+- [x] Defensive response parsing (handles malformed ChatGPT responses)
+
+### 🔧 Recent Improvements (2025-10-12)
+- **Volume Filtering:** Added `check_volume_conditions()` to filter low-volume periods
+- **Error Handling:** Fixed TypeError when ChatGPT returns dict instead of string
+- **Defensive Parsing:** Added type validation in `parse_llm_response()` and `send_to_discord()`
+- **Configuration:** Adjusted MIN_DISTANCE_PERCENT to 0.30% and MAX_DISTANCE_PERCENT to 1.90%
 
 ### 🐛 Known Issues
-- `positions.json` still has `paper_trading_balance` field (legacy, ignored)
-- `main.py` is outdated (old paper trading version, not used)
+- `positions.json` still has `paper_trading_balance` field (legacy, ignored - not worth removing)
+- `main.py` is outdated (old paper trading version, not used - kept for reference)
+- Futures contract expires Oct 31, 2025 - will need to update product ID before expiration
 
 ---
 
@@ -421,7 +514,7 @@ State machine prevents duplicates and handles direction changes:
 **Current:** 100% live trading with real money on Coinbase Futures
 
 **How it works:**
-- Executes real market orders via Coinbase Advanced API
+- Executes real limit/market orders via Coinbase Advanced API
 - Places real stop-loss and take-profit orders
 - Tracks actual positions on Coinbase
 - Calculates profit/loss from actual fills
@@ -430,8 +523,10 @@ State machine prevents duplicates and handles direction changes:
 **Risk Management:**
 - Start with small position sizes (1 contract = 0.1 ETH)
 - Bot validates all trades before execution
+- Volume filtering prevents illiquid trades
 - Stop-loss orders always placed immediately
 - Position size configurable in `CoinbaseMain.py`
+- Distance constraints prevent extreme stops/targets
 
 ### Data Source
 
@@ -507,6 +602,7 @@ All API keys stored as GitHub Secrets (not visible in repo or logs).
 - Not financial advice - use at your own risk
 - The bot executes trades automatically without human intervention
 - Stop-loss orders may not prevent all losses (slippage, gap moves, etc.)
+- Volume filtering reduces but doesn't eliminate execution risk
 
 **By running this bot, you acknowledge:**
 - You understand the risks of automated futures trading
@@ -517,4 +613,4 @@ All API keys stored as GitHub Secrets (not visible in repo or logs).
 ---
 
 **Maintained By:** Alejandro + Claude Code
-**Version:** 4.0 (Live ETH Futures Trading + GitHub Actions)
+**Version:** 4.1 (Live ETH Futures Trading + Volume Filtering + Enhanced Error Handling)
