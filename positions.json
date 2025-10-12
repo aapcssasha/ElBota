@@ -11,7 +11,7 @@
     "take_profit_order_id": "6436c740-e93e-48c2-9e6c-84f622d30499",
     "unrealized_pnl": null
   },
-  "last_signal": "sell",
+  "last_signal": "hold",
   "trade_history": [
     {
       "type": "long",
