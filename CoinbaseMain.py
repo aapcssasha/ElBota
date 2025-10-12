@@ -25,6 +25,13 @@ TIMEFRAME_MINUTES = 120  # How many minutes of data to fetch
 CONTRACTS_PER_TRADE = 1  # Number of contracts to trade (0.1 ETH each)
 CONTRACT_MULTIPLIER = 0.1  # 0.1 ETH per contract for nano ETH futures
 
+# Order execution settings
+ORDER_TYPE = "market"  # "market" or "limit" - market is faster, limit avoids spread
+
+# Stop/Target distance constraints (as percentage from entry)
+MIN_DISTANCE_PERCENT = 0.10  # Minimum 0.10% distance (prevents overly tight stops)
+MAX_DISTANCE_PERCENT = 0.50  # Maximum 0.50% distance (keeps stops reasonable)
+
 # Derived values
 CRYPTO_LOWER = CRYPTO_SYMBOL.lower()
 
@@ -136,13 +143,14 @@ def check_stop_target(positions_data, csv_data):
     return False, None, None, []
 
 
-def execute_real_futures_trade(action, contracts, client):
+def execute_real_futures_trade(action, contracts, client, limit_price=None):
     """Execute a real futures trade on Coinbase
 
     Args:
         action: "open_long", "open_short", "close_long", "close_short"
         contracts: Number of contracts to trade
         client: Coinbase RESTClient instance
+        limit_price: Optional limit price (for limit orders)
 
     Returns:
         dict: Trade result with details
@@ -160,21 +168,41 @@ def execute_real_futures_trade(action, contracts, client):
             result["message"] = f"❌ Unknown action: {action}"
             return result
 
-        # Create market order for futures (generate unique order ID)
+        # Generate unique order ID
         client_order_id = str(uuid.uuid4())
 
-        if order_side == "BUY":
-            order = client.market_order_buy(
-                client_order_id=client_order_id,
-                product_id=FUTURES_PRODUCT_ID,
-                base_size=str(contracts),
-            )
-        else:  # SELL
-            order = client.market_order_sell(
-                client_order_id=client_order_id,
-                product_id=FUTURES_PRODUCT_ID,
-                base_size=str(contracts),
-            )
+        # Execute order based on ORDER_TYPE setting
+        if ORDER_TYPE == "limit" and limit_price is not None:
+            # LIMIT ORDER - avoids spread but may not fill immediately
+            limit_price_rounded = int(round(limit_price))
+            if order_side == "BUY":
+                order = client.limit_order_gtc_buy(
+                    client_order_id=client_order_id,
+                    product_id=FUTURES_PRODUCT_ID,
+                    base_size=str(contracts),
+                    limit_price=str(limit_price_rounded),
+                )
+            else:  # SELL
+                order = client.limit_order_gtc_sell(
+                    client_order_id=client_order_id,
+                    product_id=FUTURES_PRODUCT_ID,
+                    base_size=str(contracts),
+                    limit_price=str(limit_price_rounded),
+                )
+        else:
+            # MARKET ORDER (default) - executes immediately but may have slippage
+            if order_side == "BUY":
+                order = client.market_order_buy(
+                    client_order_id=client_order_id,
+                    product_id=FUTURES_PRODUCT_ID,
+                    base_size=str(contracts),
+                )
+            else:  # SELL
+                order = client.market_order_sell(
+                    client_order_id=client_order_id,
+                    product_id=FUTURES_PRODUCT_ID,
+                    base_size=str(contracts),
+                )
 
         # Convert response object to dict
         order_dict = order.to_dict() if hasattr(order, "to_dict") else {}
@@ -475,8 +503,8 @@ def execute_trade(
     Returns:
         dict: Trade result
     """
-    # Real trading - execute market order first
-    result = execute_real_futures_trade(action, CONTRACTS_PER_TRADE, client)
+    # Real trading - execute order (market or limit based on ORDER_TYPE setting)
+    result = execute_real_futures_trade(action, CONTRACTS_PER_TRADE, client, limit_price=price)
 
     # ✅ NEW: Place stop-loss and take-profit orders after opening position
     if result.get("success") and action in ["open_long", "open_short"]:
@@ -1092,11 +1120,11 @@ Current {CRYPTO_SYMBOL} price: ${current_price:,.2f}
    - The stop MUST be at a real structural pivot, not just a random recent candle high/low
 
    **STOP DISTANCE CONSTRAINTS (CRITICAL):**
-   - Minimum stop distance: 0.10% from entry (|entry - stop| / entry ≥ 0.001)
-   - Maximum stop distance: 0.50% from entry (|entry - stop| / entry ≤ 0.005)
+   - Minimum stop distance: {MIN_DISTANCE_PERCENT}% from entry (|entry - stop| / entry ≥ {MIN_DISTANCE_PERCENT/100})
+   - Maximum stop distance: {MAX_DISTANCE_PERCENT}% from entry (|entry - stop| / entry ≤ {MAX_DISTANCE_PERCENT/100})
    - Calculate: (|entry - stop| / entry) × 100 = percentage
-   - If the nearest strong pivot is closer than 0.10%, look for the next major pivot
-   - If all pivots are more than 0.50% away → use "hold"
+   - If the nearest strong pivot is closer than {MIN_DISTANCE_PERCENT}%, look for the next major pivot
+   - If all pivots are more than {MAX_DISTANCE_PERCENT}% away → use "hold"
 
 5. **TARGET CALCULATION** (Based on market structure FIRST, ratio check SECOND):
    - **PRIORITY: Find the best target based on market structure**
@@ -1142,7 +1170,7 @@ For BUY (LONG):
   * DO NOT just use the low of the last few candles - find SIGNIFICANT pivots
   * Place stop 5-20 dollars BELOW this pivot
   * stop_loss MUST BE BELOW entry_price
-  * CHECK: Is |entry - stop| / entry between 0.10% and 0.50%? If not, find different pivot
+  * CHECK: Is |entry - stop| / entry between {MIN_DISTANCE_PERCENT}% and {MAX_DISTANCE_PERCENT}%? If not, find different pivot
 
 For SELL (SHORT):
   * Look through ALL {TIMEFRAME_MINUTES} minutes of data for the strongest swing HIGH or resistance pivot
@@ -1150,7 +1178,7 @@ For SELL (SHORT):
   * DO NOT just use the high of the last few candles - find SIGNIFICANT pivots
   * Place stop 5-20 dollars ABOVE this pivot
   * stop_loss MUST BE ABOVE entry_price
-  * CHECK: Is |entry - stop| / entry between 0.10% and 0.50%? If not, find different pivot
+  * CHECK: Is |entry - stop| / entry between {MIN_DISTANCE_PERCENT}% and {MAX_DISTANCE_PERCENT}%? If not, find different pivot
 
 Step 3: CALCULATE THE TARGET (Market structure is PRIORITY, ratio is just a check)
   * Calculate risk = |entry_price - stop_loss|
@@ -1168,7 +1196,7 @@ Example for LONG (good ratio):
   * Entry: $4,300
   * Looking at {TIMEFRAME_MINUTES}min data, find strong pivot low at $4,288 (tested 3 times)
   * Stop: $4,285 (below pivot)
-  * Risk: $4,300 - $4,285 = $15 → 0.35% ✓ (between 0.10%-0.50%)
+  * Risk: $4,300 - $4,285 = $15 → 0.35% ✓ (between {MIN_DISTANCE_PERCENT}%-{MAX_DISTANCE_PERCENT}%)
   * Looking for resistance: Strong resistance at $4,315 (consolidation zone)
   * Target: $4,315 (distance: $15 → 0.35%, ratio: 1:1 ✓) - Within 0.5:1 to 3:1 range
 
@@ -1176,14 +1204,14 @@ Example for SHORT (acceptable ratio):
   * Entry: $4,300
   * Looking at {TIMEFRAME_MINUTES}min data, find strong pivot high at $4,312 (tested 3 times)
   * Stop: $4,315 (above pivot)
-  * Risk: $4,315 - $4,300 = $15 → 0.35% ✓ (between 0.10%-0.50%)
+  * Risk: $4,315 - $4,300 = $15 → 0.35% ✓ (between {MIN_DISTANCE_PERCENT}%-{MAX_DISTANCE_PERCENT}%)
   * Looking for support: Strong support at $4,280 (tested 2x as support)
   * Target: $4,280 (distance: $20 → 0.47%, ratio: 1.33:1 ✓) - Within range
 
 Example for LONG (great ratio):
   * Entry: $4,300
   * Strong pivot low at $4,280 → Stop: $4,278
-  * Risk: $22 → 0.51% ✗ (exceeds 0.50% max)
+  * Risk: $22 → 0.51% ✗ (exceeds {MAX_DISTANCE_PERCENT}% max)
   * Result: Try next pivot at $4,288 → Stop: $4,285 → 0.35% ✓
   * Next resistance at $4,320 (major level)
   * Target: $4,320 (distance: $20 → 0.47%, ratio: 1.33:1 ✓)
@@ -1191,13 +1219,13 @@ Example for LONG (great ratio):
 Example of REJECTED trade (stop too tight):
   * Entry: $4,300, nearest pivot: $4,298
   * Stop would be: $4,297
-  * Risk: $3 → 0.07% ✗ (less than 0.10% minimum)
+  * Risk: $3 → 0.07% ✗ (less than {MIN_DISTANCE_PERCENT}% minimum)
   * Result: Find a different pivot OR use "hold"
 
 FINAL VALIDATION (Check ALL of these):
 - BUY: stop_loss < entry_price < take_profit ✓
 - SELL: take_profit < entry_price < stop_loss ✓
-- Stop distance: 0.10% ≤ |entry - stop| / entry ≤ 0.50% ✓
+- Stop distance: {MIN_DISTANCE_PERCENT}% ≤ |entry - stop| / entry ≤ {MAX_DISTANCE_PERCENT}% ✓
 - Risk-reward ratio: 0.5 ≤ ratio ≤ 3.0 (any value in range is acceptable) ✓
 - Stop is at a SIGNIFICANT pivot from the full {TIMEFRAME_MINUTES}min data (not a random recent candle) ✓
 - Target is at a real support/resistance level (not calculated artificially) ✓
@@ -1221,7 +1249,7 @@ DOUBLE-CHECK before responding:
 - BUY: Is stop < entry < target? ✓
 - SELL: Is target < entry < stop? ✓
 - Is stop placed at a SIGNIFICANT pivot from the FULL {TIMEFRAME_MINUTES}min data (not just last few candles)? ✓
-- Is stop distance between 0.10% and 0.50% from entry? ✓
+- Is stop distance between {MIN_DISTANCE_PERCENT}% and {MAX_DISTANCE_PERCENT}% from entry? ✓
 - Did I place target at an actual support/resistance level (not artificially calculated)? ✓
 - Is risk-reward ratio between 0.5:1 and 3:1? ✓
 - Did I prioritize market structure FIRST, then check ratio SECOND? ✓"""
@@ -1317,17 +1345,17 @@ def validate_trade_levels(trade_data, current_price):
     stop_percentage = (stop_distance / entry) * 100  # Convert to percentage
     target_percentage = (target_distance / entry) * 100
 
-    # Check stop distance constraints (0.10% to 0.50%)
-    if stop_percentage < 0.10:
-        return False, f"Stop too tight: {stop_percentage:.2f}% (minimum 0.10%)"
-    if stop_percentage > 0.50:
-        return False, f"Stop too wide: {stop_percentage:.2f}% (maximum 0.50%)"
+    # Check stop distance constraints (use configured min/max percentages)
+    if stop_percentage < MIN_DISTANCE_PERCENT:
+        return False, f"Stop too tight: {stop_percentage:.2f}% (minimum {MIN_DISTANCE_PERCENT}%)"
+    if stop_percentage > MAX_DISTANCE_PERCENT:
+        return False, f"Stop too wide: {stop_percentage:.2f}% (maximum {MAX_DISTANCE_PERCENT}%)"
 
-    # Check target distance constraints (0.10% to 0.50%)
-    if target_percentage < 0.10:
-        return False, f"Target too close: {target_percentage:.2f}% (minimum 0.10%)"
-    if target_percentage > 0.50:
-        return False, f"Target too far: {target_percentage:.2f}% (maximum 0.50%)"
+    # Check target distance constraints (use configured min/max percentages)
+    if target_percentage < MIN_DISTANCE_PERCENT:
+        return False, f"Target too close: {target_percentage:.2f}% (minimum {MIN_DISTANCE_PERCENT}%)"
+    if target_percentage > MAX_DISTANCE_PERCENT:
+        return False, f"Target too far: {target_percentage:.2f}% (maximum {MAX_DISTANCE_PERCENT}%)"
 
     # Check risk-reward ratio (0.5:1 to 3:1, meaning 1:2 to 3:1)
     rr_ratio = target_distance / stop_distance if stop_distance > 0 else 0
