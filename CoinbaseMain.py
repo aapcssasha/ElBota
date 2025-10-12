@@ -728,17 +728,27 @@ def manage_positions(positions_data, trade_data, current_price, csv_data, client
                     }
                 )
             else:
-                # Cancel any previous limit orders before new trade
-                cancel_all_open_orders(client)
-                result = execute_trade(
-                    "open_long",
-                    current_price,
-                    positions_data,
-                    trade_data.get("stop_loss"),
-                    trade_data.get("take_profit"),
-                    client=client,
-                )
-                results.append(result)
+                # NEW: Check volume conditions before opening trade
+                volume_ok, volume_msg = check_volume_conditions(csv_data)
+                if not volume_ok:
+                    results.append(
+                        {
+                            "success": False,
+                            "message": f"⚠️ Volume too low to open LONG: {volume_msg}",
+                        }
+                    )
+                else:
+                    # Cancel any previous limit orders before new trade
+                    cancel_all_open_orders(client)
+                    result = execute_trade(
+                        "open_long",
+                        current_price,
+                        positions_data,
+                        trade_data.get("stop_loss"),
+                        trade_data.get("take_profit"),
+                        client=client,
+                    )
+                    results.append(result)
         elif new_signal == "sell":
             # Validate trade levels before executing
             is_valid, error_msg = validate_trade_levels(trade_data, current_price)
@@ -750,17 +760,27 @@ def manage_positions(positions_data, trade_data, current_price, csv_data, client
                     }
                 )
             else:
-                # Cancel any previous limit orders before new trade
-                cancel_all_open_orders(client)
-                result = execute_trade(
-                    "open_short",
-                    current_price,
-                    positions_data,
-                    trade_data.get("stop_loss"),
-                    trade_data.get("take_profit"),
-                    client=client,
-                )
-                results.append(result)
+                # NEW: Check volume conditions before opening trade
+                volume_ok, volume_msg = check_volume_conditions(csv_data)
+                if not volume_ok:
+                    results.append(
+                        {
+                            "success": False,
+                            "message": f"⚠️ Volume too low to open SHORT: {volume_msg}",
+                        }
+                    )
+                else:
+                    # Cancel any previous limit orders before new trade
+                    cancel_all_open_orders(client)
+                    result = execute_trade(
+                        "open_short",
+                        current_price,
+                        positions_data,
+                        trade_data.get("stop_loss"),
+                        trade_data.get("take_profit"),
+                        client=client,
+                    )
+                    results.append(result)
         elif new_signal == "hold":
             # Cancel any lingering limit orders (e.g., unfilled entry orders from previous runs)
             cancel_all_open_orders(client)
@@ -833,17 +853,27 @@ def manage_positions(positions_data, trade_data, current_price, csv_data, client
                     }
                 )
             else:
-                # Cancel any previous limit orders before new trade (though just closed)
-                cancel_all_open_orders(client)
-                result2 = execute_trade(
-                    "open_short",
-                    current_price,
-                    positions_data,
-                    trade_data.get("stop_loss"),
-                    trade_data.get("take_profit"),
-                    client=client,
-                )
-                results.append(result2)
+                # NEW: Check volume conditions before opening opposite position
+                volume_ok, volume_msg = check_volume_conditions(csv_data)
+                if not volume_ok:
+                    results.append(
+                        {
+                            "success": False,
+                            "message": f"⚠️ Volume too low to open SHORT: {volume_msg}",
+                        }
+                    )
+                else:
+                    # Cancel any previous limit orders before new trade (though just closed)
+                    cancel_all_open_orders(client)
+                    result2 = execute_trade(
+                        "open_short",
+                        current_price,
+                        positions_data,
+                        trade_data.get("stop_loss"),
+                        trade_data.get("take_profit"),
+                        client=client,
+                    )
+                    results.append(result2)
         elif new_signal == "hold":
             result = execute_trade(
                 "close_long", current_price, positions_data, client=client
@@ -915,17 +945,27 @@ def manage_positions(positions_data, trade_data, current_price, csv_data, client
                     }
                 )
             else:
-                # Cancel any previous limit orders before new trade (though just closed)
-                cancel_all_open_orders(client)
-                result2 = execute_trade(
-                    "open_long",
-                    current_price,
-                    positions_data,
-                    trade_data.get("stop_loss"),
-                    trade_data.get("take_profit"),
-                    client=client,
-                )
-                results.append(result2)
+                # NEW: Check volume conditions before opening opposite position
+                volume_ok, volume_msg = check_volume_conditions(csv_data)
+                if not volume_ok:
+                    results.append(
+                        {
+                            "success": False,
+                            "message": f"⚠️ Volume too low to open LONG: {volume_msg}",
+                        }
+                    )
+                else:
+                    # Cancel any previous limit orders before new trade (though just closed)
+                    cancel_all_open_orders(client)
+                    result2 = execute_trade(
+                        "open_long",
+                        current_price,
+                        positions_data,
+                        trade_data.get("stop_loss"),
+                        trade_data.get("take_profit"),
+                        client=client,
+                    )
+                    results.append(result2)
         elif new_signal == "hold":
             result = execute_trade(
                 "close_short", current_price, positions_data, client=client
@@ -1473,6 +1513,53 @@ def validate_trade_levels(trade_data, current_price):
             )
 
     return True, None
+
+
+def check_volume_conditions(csv_data):
+    """Check if volume conditions are met for opening new trades
+
+    Conditions (both must be satisfied):
+    - Average volume of last 10 candles must be > 100
+    - At least 7 out of 10 candles must have volume > 20
+
+    Returns:
+        tuple: (is_valid, failure_message)
+            - is_valid: True if both conditions pass, False otherwise
+            - failure_message: None if valid, descriptive string if invalid
+    """
+    # Parse CSV data to get last 10 candles
+    lines = csv_data.strip().split("\n")[1:]  # Skip header
+
+    # Get last 10 candles (or all if less than 10)
+    last_10_lines = lines[-10:] if len(lines) >= 10 else lines
+
+    volumes = []
+    for line in last_10_lines:
+        parts = line.split(",")
+        volume = float(parts[5])  # Volume is 6th column (index 5)
+        volumes.append(volume)
+
+    # Check condition 1: Average volume > 100
+    avg_volume = sum(volumes) / len(volumes) if volumes else 0
+    avg_check = avg_volume > 100
+
+    # Check condition 2: At least 7 candles with volume > 20
+    high_volume_count = sum(1 for v in volumes if v > 20)
+    count_check = high_volume_count >= 7
+
+    # Determine result
+    if avg_check and count_check:
+        return True, None
+
+    # Build failure message
+    failures = []
+    if not avg_check:
+        failures.append(f"avg volume {avg_volume:.1f} ≤ 100")
+    if not count_check:
+        failures.append(f"only {high_volume_count}/10 candles > 20 volume (need 7+)")
+
+    failure_msg = " AND ".join(failures)
+    return False, failure_msg
 
 
 def send_to_discord(
