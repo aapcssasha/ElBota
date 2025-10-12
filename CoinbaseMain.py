@@ -26,11 +26,11 @@ CONTRACTS_PER_TRADE = 1  # Number of contracts to trade (0.1 ETH each)
 CONTRACT_MULTIPLIER = 0.1  # 0.1 ETH per contract for nano ETH futures
 
 # Order execution settings
-ORDER_TYPE = "market"  # "market" or "limit" - market is faster, limit avoids spread
+ORDER_TYPE = "limit"  # "market" or "limit" - market is faster, limit avoids spread
 
 # Stop/Target distance constraints (as percentage from entry)
-MIN_DISTANCE_PERCENT = 0.10  # Minimum 0.10% distance (prevents overly tight stops)
-MAX_DISTANCE_PERCENT = 0.50  # Maximum 0.50% distance (keeps stops reasonable)
+MIN_DISTANCE_PERCENT = 0.20  # Minimum 0.10% distance (prevents overly tight stops)
+MAX_DISTANCE_PERCENT = 0.90  # Maximum 0.50% distance (keeps stops reasonable)
 
 # Derived values
 CRYPTO_LOWER = CRYPTO_SYMBOL.lower()
@@ -504,7 +504,9 @@ def execute_trade(
         dict: Trade result
     """
     # Real trading - execute order (market or limit based on ORDER_TYPE setting)
-    result = execute_real_futures_trade(action, CONTRACTS_PER_TRADE, client, limit_price=price)
+    result = execute_real_futures_trade(
+        action, CONTRACTS_PER_TRADE, client, limit_price=price
+    )
 
     # ✅ NEW: Place stop-loss and take-profit orders after opening position
     if result.get("success") and action in ["open_long", "open_short"]:
@@ -1120,8 +1122,8 @@ Current {CRYPTO_SYMBOL} price: ${current_price:,.2f}
    - The stop MUST be at a real structural pivot, not just a random recent candle high/low
 
    **STOP DISTANCE CONSTRAINTS (CRITICAL):**
-   - Minimum stop distance: {MIN_DISTANCE_PERCENT}% from entry (|entry - stop| / entry ≥ {MIN_DISTANCE_PERCENT/100})
-   - Maximum stop distance: {MAX_DISTANCE_PERCENT}% from entry (|entry - stop| / entry ≤ {MAX_DISTANCE_PERCENT/100})
+   - Minimum stop distance: {MIN_DISTANCE_PERCENT}% from entry (|entry - stop| / entry ≥ {MIN_DISTANCE_PERCENT / 100})
+   - Maximum stop distance: {MAX_DISTANCE_PERCENT}% from entry (|entry - stop| / entry ≤ {MAX_DISTANCE_PERCENT / 100})
    - Calculate: (|entry - stop| / entry) × 100 = percentage
    - If the nearest strong pivot is closer than {MIN_DISTANCE_PERCENT}%, look for the next major pivot
    - If all pivots are more than {MAX_DISTANCE_PERCENT}% away → use "hold"
@@ -1296,7 +1298,9 @@ def parse_llm_response(response_text):
 
     # Try to find JSON in the response (old method for backwards compatibility)
     # This regex now allows nested braces
-    json_match = re.search(r'\{(?:[^{}]|(?:\{[^{}]*\}))*"action"[^}]*\}', response_text, re.DOTALL)
+    json_match = re.search(
+        r'\{(?:[^{}]|(?:\{[^{}]*\}))*"action"[^}]*\}', response_text, re.DOTALL
+    )
 
     if json_match:
         try:
@@ -1347,15 +1351,27 @@ def validate_trade_levels(trade_data, current_price):
 
     # Check stop distance constraints (use configured min/max percentages)
     if stop_percentage < MIN_DISTANCE_PERCENT:
-        return False, f"Stop too tight: {stop_percentage:.2f}% (minimum {MIN_DISTANCE_PERCENT}%)"
+        return (
+            False,
+            f"Stop too tight: {stop_percentage:.2f}% (minimum {MIN_DISTANCE_PERCENT}%)",
+        )
     if stop_percentage > MAX_DISTANCE_PERCENT:
-        return False, f"Stop too wide: {stop_percentage:.2f}% (maximum {MAX_DISTANCE_PERCENT}%)"
+        return (
+            False,
+            f"Stop too wide: {stop_percentage:.2f}% (maximum {MAX_DISTANCE_PERCENT}%)",
+        )
 
     # Check target distance constraints (use configured min/max percentages)
     if target_percentage < MIN_DISTANCE_PERCENT:
-        return False, f"Target too close: {target_percentage:.2f}% (minimum {MIN_DISTANCE_PERCENT}%)"
+        return (
+            False,
+            f"Target too close: {target_percentage:.2f}% (minimum {MIN_DISTANCE_PERCENT}%)",
+        )
     if target_percentage > MAX_DISTANCE_PERCENT:
-        return False, f"Target too far: {target_percentage:.2f}% (maximum {MAX_DISTANCE_PERCENT}%)"
+        return (
+            False,
+            f"Target too far: {target_percentage:.2f}% (maximum {MAX_DISTANCE_PERCENT}%)",
+        )
 
     # Check risk-reward ratio (0.5:1 to 3:1, meaning 1:2 to 3:1)
     rr_ratio = target_distance / stop_distance if stop_distance > 0 else 0
