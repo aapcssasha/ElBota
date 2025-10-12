@@ -1395,7 +1395,12 @@ def parse_llm_response(response_text):
         if isinstance(full_json, dict):
             # Check if it has the nested structure: {"analysis": "...", "trade_data": {...}}
             if "analysis" in full_json and "trade_data" in full_json:
-                return full_json["analysis"], full_json["trade_data"]
+                # Ensure analysis is a string
+                analysis_value = full_json["analysis"]
+                if not isinstance(analysis_value, str):
+                    analysis_value = json.dumps(analysis_value) if isinstance(analysis_value, dict) else str(analysis_value)
+                    print("⚠️ Warning: ChatGPT returned analysis as non-string, converted")
+                return analysis_value, full_json["trade_data"]
             # Check if it has "action" at top level (old flat format)
             elif "action" in full_json:
                 return "", full_json
@@ -1575,8 +1580,12 @@ def send_to_discord(
 ):
     """Send analysis and chart to Discord with position management info"""
 
-    # Start with analysis
-    full_description = analysis
+    # Start with analysis (ensure it's always a string)
+    if isinstance(analysis, dict):
+        # If analysis is accidentally a dict, convert to JSON string or extract text
+        analysis = json.dumps(analysis, indent=2) if analysis else "Analysis parsing error"
+        print("⚠️ Warning: analysis was a dict, converted to string")
+    full_description = str(analysis)
 
     # Add trade results (position changes)
     if trade_results:
