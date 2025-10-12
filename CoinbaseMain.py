@@ -268,9 +268,9 @@ def place_stop_loss_order(client, position_type, contracts, stop_price):
         client_order_id = str(uuid.uuid4())
         stop_price_rounded = int(round(stop_price))
         if position_type == "long":
-            limit_price_rounded = stop_price_rounded - 1
+            limit_price_rounded = stop_price_rounded - 2  # $2 buffer for better fill rate
         else:
-            limit_price_rounded = stop_price_rounded + 1
+            limit_price_rounded = stop_price_rounded + 2  # $2 buffer for better fill rate
 
         # For LONG: sell to close when price drops (stop below entry)
         # For SHORT: buy to close when price rises (stop above entry)
@@ -1729,23 +1729,19 @@ if __name__ == "__main__":
 
         # Sync positions.json with actual Coinbase position
         positions_data["current_position"]["status"] = real_position["side"].lower()
-        positions_data["current_position"]["entry_price"] = real_position["entry_price"]
-        positions_data["current_position"]["entry_time"] = datetime.now().isoformat()
+
+        # FIXED: Preserve local entry price if API returns 0 (common issue)
+        local_entry = positions_data["current_position"].get("entry_price")
+        if real_position["entry_price"] == 0 and local_entry:
+            # Keep local entry price, don't overwrite with 0
+            print(f"   🔄 Preserving local entry price: ${local_entry:,.2f} (API returned 0)")
+        else:
+            # Update with API entry price (only if non-zero or local is None)
+            positions_data["current_position"]["entry_price"] = real_position["entry_price"]
+
         positions_data["current_position"]["unrealized_pnl"] = real_position[
             "unrealized_pnl"
-        ]  # FIXED: Store for accurate P/L display
-
-        # FIXED: If entry_vwap == 0, back-calculate entry from unrealized_pnl
-        if positions_data["current_position"]["entry_price"] == 0:
-            pnl = real_position["unrealized_pnl"]
-            size = real_position["size"] * CONTRACT_MULTIPLIER
-            if size > 0 and pnl is not None:
-                if real_position["side"] == "LONG":
-                    entry = current_price - (pnl / size)
-                else:  # SHORT
-                    entry = current_price + (pnl / size)
-                positions_data["current_position"]["entry_price"] = entry
-                print(f"   🔄 Back-calculated entry price: ${entry:,.2f} (from P/L)")
+        ]  # Store for accurate P/L display
 
         print("   🔄 Synced local state with Coinbase position")
     else:  # No error, but no position on API
