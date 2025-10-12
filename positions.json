@@ -7,11 +7,11 @@
     "take_profit": null,
     "trade_id": null,
     "action": null,
-    "stop_loss_order_id": "37690df4-8df2-4ee8-8def-a7d364d4c63d",
-    "take_profit_order_id": "90df0dd0-b3f0-419c-851f-641fe91d89c0",
+    "stop_loss_order_id": "0a0d851b-9f2b-43bb-a964-58d758e71254",
+    "take_profit_order_id": "cefd2712-6e32-48dc-b408-20bc95d13459",
     "unrealized_pnl": null
   },
-  "last_signal": "hold",
+  "last_signal": "sell",
   "trade_history": [
     {
       "type": "long",
@@ -171,34 +171,17 @@
       "exit_time": "2025-10-11T15:43:39.889536"
     },
     {
-      "type": "long",
-      "entry_price": 3764.0,
-      "exit_price": 3764.0,
-      "profit_loss": 0.0,
-      "entry_time": "2025-10-11T20:21:59.074674",
-      "exit_time": "2025-10-11T20:22:02.222709"
-    },
-    {
       "type": "short",
-      "entry_price": 3760.0,
-      "exit_price": 3750.0,
-      "profit_loss": 1.0,
-      "entry_time": "2025-10-11T22:03:01.075489",
-      "exit_time": "2025-10-11T22:19:48.350897",
+      "entry_price": 3773.5,
+      "exit_price": 3760.0,
+      "profit_loss": 1.35,
+      "entry_time": "2025-10-11T15:54:23.065297",
+      "exit_time": "2025-10-11T15:55:34.229170",
       "note": "Closed target_hit (desync detected)"
-    },
-    {
-      "type": "short",
-      "entry_price": 3761.0,
-      "exit_price": 3780.5,
-      "profit_loss": -1.9500000000000002,
-      "entry_time": "2025-10-11T22:33:31.059200",
-      "exit_time": "2025-10-11T22:40:03.205643",
-      "note": "Closed externally (desync detected)"
     }
   ],
   "paper_trading_balance": 2000.0,
-  "total_trades": 21,
+  "total_trades": 19,
   "winning_trades": 9,
-  "losing_trades": 12
+  "losing_trades": 10
 }
