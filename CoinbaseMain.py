@@ -301,17 +301,36 @@ def place_stop_loss_order(client, position_type, contracts, stop_price):
         # Extract order_id from nested success_response (same as market orders)
         if order_dict.get("success", False):
             order_id = order_dict.get("success_response", {}).get("order_id", None)
+            if order_id:
+                return {
+                    "success": True,
+                    "order_id": order_id,
+                    "message": f"✅ Stop-loss order placed at ${stop_price_rounded}",
+                }
+            else:
+                # Order API returned success but no order_id
+                error_msg = order_dict.get("success_response", {}).get("error", "No order_id returned")
+                print(f"Stop-loss order issue: {error_msg}")
+                return {
+                    "success": False,
+                    "order_id": None,
+                    "message": f"❌ Stop-loss order failed: {error_msg}",
+                }
         else:
-            order_id = None
-
-        return {
-            "success": True,
-            "order_id": order_id,
-            "message": f"✅ Stop-loss order placed at ${stop_price_rounded}",
-        }
+            # Order failed
+            error_response = order_dict.get("error_response", {})
+            error_msg = error_response.get("message", error_response.get("error_details", "Unknown error"))
+            print(f"Stop-loss order failed: {error_msg}")
+            return {
+                "success": False,
+                "order_id": None,
+                "message": f"❌ Stop-loss order failed: {error_msg}",
+            }
 
     except Exception as e:
-        print(f"Error details: {e}")  # FIXED: Add logging for debugging
+        print(f"Stop-loss exception: {e}")
+        import traceback
+        traceback.print_exc()
         return {
             "success": False,
             "order_id": None,
@@ -360,17 +379,36 @@ def place_take_profit_order(client, position_type, contracts, target_price):
         # Extract order_id from nested success_response (same as market orders)
         if order_dict.get("success", False):
             order_id = order_dict.get("success_response", {}).get("order_id", None)
+            if order_id:
+                return {
+                    "success": True,
+                    "order_id": order_id,
+                    "message": f"✅ Take-profit order placed at ${target_price_rounded}",
+                }
+            else:
+                # Order API returned success but no order_id
+                error_msg = order_dict.get("success_response", {}).get("error", "No order_id returned")
+                print(f"Take-profit order issue: {error_msg}")
+                return {
+                    "success": False,
+                    "order_id": None,
+                    "message": f"❌ Take-profit order failed: {error_msg}",
+                }
         else:
-            order_id = None
-
-        return {
-            "success": True,
-            "order_id": order_id,
-            "message": f"✅ Take-profit order placed at ${target_price_rounded}",
-        }
+            # Order failed
+            error_response = order_dict.get("error_response", {})
+            error_msg = error_response.get("message", error_response.get("error_details", "Unknown error"))
+            print(f"Take-profit order failed: {error_msg}")
+            return {
+                "success": False,
+                "order_id": None,
+                "message": f"❌ Take-profit order failed: {error_msg}",
+            }
 
     except Exception as e:
-        print(f"Error details: {e}")  # FIXED: Add logging for debugging
+        print(f"Take-profit exception: {e}")
+        import traceback
+        traceback.print_exc()
         return {
             "success": False,
             "order_id": None,
@@ -385,12 +423,16 @@ def cancel_pending_orders(client, order_ids):
         client: Coinbase RESTClient
         order_ids: List of order IDs to cancel
     """
+    import time
+
     if not order_ids:
         return
 
     try:
         client.cancel_orders(order_ids=order_ids)
         print(f"   ✅ Cancelled {len([o for o in order_ids if o])} pending orders")
+        # Small delay to ensure orders are fully cancelled before placing new ones
+        time.sleep(0.5)  # 500ms delay
     except Exception as e:
         print(f"   ⚠️ Error cancelling orders: {e}")
 
@@ -426,11 +468,15 @@ def get_open_order_ids(client):
 
 def cancel_all_open_orders(client):
     """Cancel all open orders for the futures product"""
+    import time
+
     order_ids = get_open_order_ids(client)
     if order_ids:
         try:
             client.cancel_orders(order_ids=order_ids)
             print(f"   ✅ Cancelled {len(order_ids)} open orders")
+            # Small delay to ensure orders are fully cancelled before placing new ones
+            time.sleep(0.5)  # 500ms delay
         except Exception as e:
             print(f"   ⚠️ Error cancelling orders: {e}")
 
@@ -526,6 +572,8 @@ def execute_trade(
                 positions_data["current_position"]["stop_loss_order_id"] = (
                     stop_result.get("order_id")
                 )
+            else:
+                print(f"   ⚠️ WARNING: Stop-loss order failed to place - position has NO STOP PROTECTION!")
 
         # Place take-profit order
         if take_profit:
@@ -541,6 +589,8 @@ def execute_trade(
                 positions_data["current_position"]["take_profit_order_id"] = (
                     tp_result.get("order_id")
                 )
+            else:
+                print(f"   ⚠️ WARNING: Take-profit order failed to place - position has NO TARGET!")
 
         # Update positions data with entry info
         positions_data["current_position"]["status"] = position_type
