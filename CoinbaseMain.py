@@ -1365,26 +1365,47 @@ Current {CRYPTO_SYMBOL} price: ${current_price:,.2f}
 
 ## OUTPUT FORMAT
 
-Provide TWO outputs:
+⚠️ **REQUIRED: Provide BOTH analysis text AND trade data**
 
-1. **ANALYSIS** (for traders):
+**Option 1 (PREFERRED): Nested JSON format**
+```json
+{{
+  "analysis": "Your detailed analysis text here...",
+  "trade_data": {{
+    "action": "buy" or "sell" or "hold",
+    "entry_price": {current_price},
+    "stop_loss": <number or null>,
+    "take_profit": <number or null>,
+    "confidence": 0-100
+  }}
+}}
+```
+
+**Option 2: Separate text + JSON**
+First provide analysis text, then JSON on separate lines:
+
+ANALYSIS TEXT HERE (explain trend, swing structure, why HOLD/BUY/SELL)
+
+{{
+  "action": "hold",
+  "entry_price": {current_price},
+  "stop_loss": null,
+  "take_profit": null,
+  "confidence": 0
+}}
+
+**Analysis text MUST include:**
 - State if UPTREND, DOWNTREND, or NO TREND
-- If trend: describe the swing structure (where are the highs/lows)
+- If trend: describe the swing structure (where are the candle highs/lows)
 - If pullback: state percentage retracement and entry zone
-- If no trend: explain why (ranging, choppy, unclear structure)
+- **If HOLD: EXPLAIN WHY** (no trend? wrong side of swing? validation failed? waiting for pullback?)
 - Give clear BUY/SELL/HOLD recommendation
 - Mention stop placement: "Stop at $X (last swing low/high from trend)"
 
-2. **TRADE_DATA** (for execution):
-{{
-  "action": "buy" or "sell" or "hold",
-  "entry_price": {current_price},
-  "stop_loss": <number>,
-  "take_profit": <number>,
-  "confidence": 0-100
-}}
-
-⚠️ CRITICAL: Output PURE JSON ONLY. NO COMMENTS. Do NOT add // text after values.
+⚠️ CRITICAL:
+- Do NOT output bare JSON without analysis text
+- NO code comments in JSON (no // text)
+- For "hold" signals, ALWAYS explain the reason
 
 ---
 
@@ -1486,9 +1507,23 @@ def parse_llm_response(response_text):
                         "⚠️ Warning: ChatGPT returned analysis as non-string, converted"
                     )
                 return analysis_value, full_json["trade_data"]
-            # Check if it has "action" at top level (old flat format)
+            # Check if it has "action" at top level (old flat format - no analysis text)
             elif "action" in full_json:
-                return "", full_json
+                # Generate a default analysis message based on action
+                action = full_json.get("action", "hold").upper()
+                confidence = full_json.get("confidence", 0)
+
+                if action == "HOLD":
+                    default_analysis = f"**HOLD signal ({confidence}% confidence):** No clear trend or valid entry setup at this time. Waiting for better conditions."
+                elif action == "BUY":
+                    default_analysis = f"**BUY signal ({confidence}% confidence):** Uptrend detected with valid pullback entry."
+                elif action == "SELL":
+                    default_analysis = f"**SELL signal ({confidence}% confidence):** Downtrend detected with valid bounce entry."
+                else:
+                    default_analysis = f"**{action} signal ({confidence}% confidence)**"
+
+                print("⚠️ Warning: ChatGPT returned flat JSON without analysis text, generated default message")
+                return default_analysis, full_json
     except (json.JSONDecodeError, ValueError):
         pass
 
