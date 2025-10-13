@@ -1200,25 +1200,35 @@ Analyze this {CRYPTO_SYMBOL}/USD 1m OHLCV data from the last {TIMEFRAME_MINUTES}
 
 Current {CRYPTO_SYMBOL} price: ${current_price:,.2f}
 
-🎯 **CRITICAL RULE: ONLY TRADE TREND FOLLOWING WITH PULLBACKS**
+🎯 **CRITICAL RULES:**
+
+1. **ONLY TRADE TREND FOLLOWING WITH PULLBACKS**
+2. **ALWAYS USE CANDLE HIGHS/LOWS FOR SWING POINTS** (NOT open/close prices)
+3. **CURRENT PRICE MUST BE ON CORRECT SIDE OF LAST SWING POINT** (above for BUY, below for SELL)
 
 **⚠️ IF NO CLEAR TREND → IMMEDIATELY USE "hold" (DO NOT TRADE)**
+**⚠️ IF CURRENT PRICE VIOLATES SWING STRUCTURE → USE "hold" (TREND BROKEN)**
 
 ---
 
 ## STEP 1: IDENTIFY THE TREND (MOST IMPORTANT!)
 
+**⚠️ CRITICAL: USE CANDLE HIGHS AND LOWS FOR SWING POINTS**
+- **Swing highs** = Use the HIGH of candles (not close price)
+- **Swing lows** = Use the LOW of candles (not close price)
+- This is ESSENTIAL for accurate trend structure identification
+
 **UPTREND DEFINITION (for BUY signals):**
 - Price makes higher highs AND higher lows
-- Each swing high is above the previous swing high
-- Each swing low is above the previous swing low
-- Example: $4000 → $4100 (swing up), pullback to $4050 (higher low), → $4150 (higher high), pullback to $4100 (higher low)
+- Each swing high (candle HIGH) is above the previous swing high (candle HIGH)
+- Each swing low (candle LOW) is above the previous swing low (candle LOW)
+- Example: Candle low at $4000 → Candle high at $4100 (swing up), pullback with candle low at $4050 (higher low), → Candle high at $4150 (higher high), pullback with candle low at $4100 (higher low)
 
 **DOWNTREND DEFINITION (for SELL signals):**
 - Price makes lower highs AND lower lows
-- Each swing high is below the previous swing high
-- Each swing low is below the previous swing low
-- Example: $4000 → $3900 (swing down), bounce to $3950 (lower high), → $3850 (lower low), bounce to $3900 (lower high)
+- Each swing high (candle HIGH) is below the previous swing high (candle HIGH)
+- Each swing low (candle LOW) is below the previous swing low (candle LOW)
+- Example: Candle high at $4000 → Candle low at $3900 (swing down), bounce with candle high at $3950 (lower high), → Candle low at $3850 (lower low), bounce with candle high at $3900 (lower high)
 
 **NO TREND / RANGING:**
 - Price moving sideways without clear direction
@@ -1248,13 +1258,14 @@ Current {CRYPTO_SYMBOL} price: ${current_price:,.2f}
 - Example: Swing from $4100 to $4050 ($50 range) → bounce to $4060-$4090 = valid entry zone
 
 **Perfect Example from User:**
-- Price at $4000 → $4100 (uptrend starting)
-- Pullback to $4050 (50% retracement) ✓
-- Swing to $4150 (higher high confirmed) ✓
-- Pullback to $4100 (current price) ✓
+- Candle LOW at $4000 → Candle HIGH at $4100 (uptrend starting)
+- Pullback with candle LOW to $4050 (50% retracement) ✓
+- Swing to candle HIGH $4150 (higher high confirmed) ✓
+- Pullback with candle LOW to $4100 (current price $4100) ✓
 - **ENTRY HERE at $4100** (50% of $4100-$4150 swing)
-- Stop: $4050 (last swing low)
-- Target: $4160+ (above last high of $4150)
+- **CRITICAL CHECK:** Current price $4100 > Last swing LOW $4100 ✓ (entry is valid)
+- Stop: $4045 (5-20 dollars below last swing LOW of $4100)
+- Target: $4160+ (above last swing HIGH of $4150)
 - This is a PERFECT trend-following setup!
 
 **IF NO PULLBACK:**
@@ -1266,17 +1277,35 @@ Current {CRYPTO_SYMBOL} price: ${current_price:,.2f}
 
 ## STEP 3: STOP-LOSS PLACEMENT (Must be at swing point in trend direction)
 
+**⚠️ CRITICAL VALIDATION FIRST:**
+
 **For UPTREND (BUY):**
-- Find the last significant swing LOW in the uptrend
-- This is where the last pullback ended (the support that held)
-- Place stop 5-20 dollars BELOW this swing low
-- Example: Last swing low at $4050 → Stop at $4045
+- Identify the last swing LOW using candle LOW values (not close)
+- Current price (${current_price:,.2f}) MUST be ABOVE this swing low
+- If current price is BELOW the last swing low → trend may be broken → use "hold"
+- Stop MUST be BELOW current price
+- Example: If current price is $4168 and last swing low (candle LOW) is $4172, this is INVALID → use "hold"
 
 **For DOWNTREND (SELL):**
-- Find the last significant swing HIGH in the downtrend
+- Identify the last swing HIGH using candle HIGH values (not close)
+- Current price (${current_price:,.2f}) MUST be BELOW this swing high
+- If current price is ABOVE the last swing high → trend may be broken → use "hold"
+- Stop MUST be ABOVE current price
+- Example: If current price is $4172 and last swing high (candle HIGH) is $4168, this is INVALID → use "hold"
+
+**STOP PLACEMENT (if validation passes):**
+
+**For UPTREND (BUY):**
+- Find the last significant swing LOW (use candle LOW, not close) that is BELOW current price
+- This is where the last pullback ended (the support that held)
+- Place stop 5-20 dollars BELOW this swing low
+- Example: Current price $4100, last swing low (candle LOW) at $4050 → Stop at $4045 ✓
+
+**For DOWNTREND (SELL):**
+- Find the last significant swing HIGH (use candle HIGH, not close) that is ABOVE current price
 - This is where the last bounce ended (the resistance that held)
 - Place stop 5-20 dollars ABOVE this swing high
-- Example: Last swing high at $3950 → Stop at $3955
+- Example: Current price $3900, last swing high (candle HIGH) at $3950 → Stop at $3955 ✓
 
 **STOP DISTANCE CONSTRAINTS:**
 - Minimum stop distance: {MIN_DISTANCE_PERCENT}% from entry
@@ -1290,15 +1319,15 @@ Current {CRYPTO_SYMBOL} price: ${current_price:,.2f}
 
 **For UPTREND (BUY):**
 - Find the next resistance level ABOVE entry price
-- Look for previous swing highs in the trend
+- Look for previous swing highs (use candle HIGH values, not close) in the trend
 - Target should be slightly above the last swing high (to ensure breakout)
-- Example: Last high was $4150 → Target at $4160 (a bit above for confirmation)
+- Example: Last candle HIGH was $4150 → Target at $4160 (a bit above for confirmation)
 
 **For DOWNTREND (SELL):**
 - Find the next support level BELOW entry price
-- Look for previous swing lows in the trend
+- Look for previous swing lows (use candle LOW values, not close) in the trend
 - Target should be slightly below the last swing low (to ensure breakdown)
-- Example: Last low was $3850 → Target at $3840 (a bit below for confirmation)
+- Example: Last candle LOW was $3850 → Target at $3840 (a bit below for confirmation)
 
 **TARGET CONSTRAINTS:**
 - Risk-reward ratio must be between 0.5:1 and 3:1
@@ -1390,20 +1419,22 @@ Provide TWO outputs:
 
 For BUY:
 - [ ] Stop < Entry < Target (direction check)
+- [ ] Current price (${current_price:,.2f}) is ABOVE the last swing LOW (candle LOW)
 - [ ] Stop distance: {MIN_DISTANCE_PERCENT}% to {MAX_DISTANCE_PERCENT}%
 - [ ] Target R:R ratio: 0.5:1 to 3:1
-- [ ] Stop at last swing LOW in uptrend
-- [ ] Target above last swing HIGH
-- [ ] Clear uptrend with higher highs + higher lows
+- [ ] Stop placed at last swing LOW (use candle LOW, not close)
+- [ ] Target placed above last swing HIGH (use candle HIGH, not close)
+- [ ] Clear uptrend with higher highs + higher lows (use candle highs/lows)
 - [ ] Currently in 20-80% pullback zone
 
 For SELL:
 - [ ] Target < Entry < Stop (direction check)
+- [ ] Current price (${current_price:,.2f}) is BELOW the last swing HIGH (candle HIGH)
 - [ ] Stop distance: {MIN_DISTANCE_PERCENT}% to {MAX_DISTANCE_PERCENT}%
 - [ ] Target R:R ratio: 0.5:1 to 3:1
-- [ ] Stop at last swing HIGH in downtrend
-- [ ] Target below last swing LOW
-- [ ] Clear downtrend with lower highs + lower lows
+- [ ] Stop placed at last swing HIGH (use candle HIGH, not close)
+- [ ] Target placed below last swing LOW (use candle LOW, not close)
+- [ ] Clear downtrend with lower highs + lower lows (use candle highs/lows)
 - [ ] Currently in 20-80% bounce zone
 
 **IF ANY CHECK FAILS → USE "hold"**
