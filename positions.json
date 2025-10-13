@@ -1,18 +1,18 @@
 {
   "current_position": {
-    "status": "none",
-    "entry_price": null,
-    "entry_time": null,
-    "stop_loss": null,
-    "take_profit": null,
+    "status": "long",
+    "entry_price": 4125.0,
+    "entry_time": "2025-10-13T15:06:08.100384",
+    "stop_loss": 4100.0,
+    "take_profit": 4190.0,
     "trade_id": null,
     "action": null,
-    "entry_order_id": null,
-    "stop_loss_order_id": null,
-    "take_profit_order_id": null,
-    "unrealized_pnl": null
+    "entry_order_id": "68271de3-e86a-4821-8703-a81357a150f1",
+    "stop_loss_order_id": "b8a34f27-68d9-4517-916f-b8757fb7311a",
+    "take_profit_order_id": "0911222b-8257-4bf8-8e43-4517b987115a",
+    "unrealized_pnl": 0.0
   },
-  "last_signal": "hold",
+  "last_signal": "buy",
   "trade_history": [
     {
       "type": "long",
