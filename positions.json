@@ -10,7 +10,7 @@
     "entry_order_id": "9d6a1e37-4d9b-4c31-bfb3-a0662e5dee5f",
     "stop_loss_order_id": "f6b1c41e-b19d-48fd-963a-2aa9da61bbc0",
     "take_profit_order_id": "9dbb3eba-188a-4d95-abfd-1fed36fba11d",
-    "unrealized_pnl": 0.15000000000000002
+    "unrealized_pnl": -0.05
   },
   "last_signal": "buy",
   "trade_history": [
