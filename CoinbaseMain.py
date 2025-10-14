@@ -28,6 +28,7 @@ CONTRACT_MULTIPLIER = 0.1  # 0.1 ETH per contract for nano ETH futures
 # Order execution settings
 ORDER_TYPE = "limit"  # "market" or "limit" - market is faster, limit avoids spread
 
+
 # ChatGPT model selection - TIME-BASED
 def get_model_for_time():
     """Select model based on Miami (Eastern) time
@@ -42,7 +43,7 @@ def get_model_for_time():
     import pytz
     from datetime import datetime
 
-    miami_tz = pytz.timezone('America/New_York')
+    miami_tz = pytz.timezone("America/New_York")
     current_time = datetime.now(miami_tz)
     hour = current_time.hour
 
@@ -53,7 +54,10 @@ def get_model_for_time():
     else:
         return "gpt-5-mini"
 
+
 MODEL_NAME = get_model_for_time()
+MODEL_NAME = "gpt-5-mini"
+
 print(f"🤖 Using model: {MODEL_NAME} (based on Miami time)")  # Log for debugging
 
 # Stop/Target distance constraints (as percentage from entry)
