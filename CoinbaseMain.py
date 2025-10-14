@@ -56,7 +56,7 @@ def get_model_for_time():
 
 
 MODEL_NAME = get_model_for_time()
-MODEL_NAME = "gpt-5-mini"
+
 
 print(f"🤖 Using model: {MODEL_NAME} (based on Miami time)")  # Log for debugging
 
