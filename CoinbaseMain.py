@@ -28,8 +28,33 @@ CONTRACT_MULTIPLIER = 0.1  # 0.1 ETH per contract for nano ETH futures
 # Order execution settings
 ORDER_TYPE = "limit"  # "market" or "limit" - market is faster, limit avoids spread
 
-# ChatGPT model selection
-MODEL_NAME = "gpt-5"  # Options: "gpt-4o-mini", "gpt-5-mini", "gpt-5", "o3", "o1", etc.
+# ChatGPT model selection - TIME-BASED
+def get_model_for_time():
+    """Select model based on Miami (Eastern) time
+
+    Peak hours (6am-2pm Miami time): gpt-5
+    Off-hours (2pm-6am Miami time): gpt-5-mini
+
+    This keeps gpt-5 usage under 250K tokens/day:
+    - 6am-2pm: 32 runs × 7K tokens = 224K tokens ✓
+    - 2pm-6am: 64 runs × 7K tokens = 448K tokens (gpt-5-mini has 2.5M limit) ✓
+    """
+    import pytz
+    from datetime import datetime
+
+    miami_tz = pytz.timezone('America/New_York')
+    current_time = datetime.now(miami_tz)
+    hour = current_time.hour
+
+    # Peak hours: 6am-2pm Miami time = use gpt-5
+    # Off-hours: 2pm-6am Miami time = use gpt-5-mini
+    if 6 <= hour < 14:  # 6am to 2pm (14:00)
+        return "gpt-5"
+    else:
+        return "gpt-5-mini"
+
+MODEL_NAME = get_model_for_time()
+print(f"🤖 Using model: {MODEL_NAME} (based on Miami time)")  # Log for debugging
 
 # Stop/Target distance constraints (as percentage from entry)
 MIN_DISTANCE_PERCENT = 0.30  # Minimum 0.10% distance (prevents overly tight stops)
@@ -1728,6 +1753,9 @@ def send_to_discord(
         full_description += "\n\n**💼 Position Updates:**"
         for result in trade_results:
             full_description += f"\n{result['message']}"
+
+    # ALWAYS show model name (below Position Updates if they exist)
+    full_description += f"\n\n🤖 **Model Used:** {MODEL_NAME}"
 
     # FIXED: Show levels from current position if exists, else from trade_data if new/invalid trade
     current_status = (
