@@ -28,6 +28,9 @@ CONTRACT_MULTIPLIER = 0.1  # 0.1 ETH per contract for nano ETH futures
 # Order execution settings
 ORDER_TYPE = "limit"  # "market" or "limit" - market is faster, limit avoids spread
 
+# ChatGPT model selection
+MODEL_NAME = "gpt-5"  # Options: "gpt-4o-mini", "gpt-5-mini", "gpt-5", "o3", "o1", etc.
+
 # Stop/Target distance constraints (as percentage from entry)
 MIN_DISTANCE_PERCENT = 0.30  # Minimum 0.10% distance (prevents overly tight stops)
 MAX_DISTANCE_PERCENT = 2.90  # Maximum 0.50% distance (keeps stops reasonable)
@@ -1185,6 +1188,8 @@ def analyze_with_llm(csv_data):
     Returns:
         tuple: (analysis_text, trade_data_dict)
     """
+    import time
+
     # Initialize OpenAI client
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -1462,10 +1467,17 @@ For SELL:
 
 For "hold": set stop_loss and take_profit to null"""
 
+    # Time the API call
+    print(f"   ⏱️  Calling {MODEL_NAME}...", end="", flush=True)
+    start_time = time.time()
+
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model=MODEL_NAME,
         messages=[{"role": "user", "content": prompt}],
     )
+
+    elapsed_time = time.time() - start_time
+    print(f" took {elapsed_time:.2f}s")
 
     full_response = response.choices[0].message.content
 
@@ -1522,7 +1534,9 @@ def parse_llm_response(response_text):
                 else:
                     default_analysis = f"**{action} signal ({confidence}% confidence)**"
 
-                print("⚠️ Warning: ChatGPT returned flat JSON without analysis text, generated default message")
+                print(
+                    "⚠️ Warning: ChatGPT returned flat JSON without analysis text, generated default message"
+                )
                 return default_analysis, full_json
     except (json.JSONDecodeError, ValueError):
         pass

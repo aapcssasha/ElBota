@@ -2,8 +2,8 @@ name: ETH Futures Trading Bot
 
 on:
   schedule:
-    # Run every 15 minutes (public repo = unlimited minutes!)
-    - cron: '*/15 * * * *'
+    # Run every 20 minutes (allows gpt-5 to complete analysis with buffer)
+    - cron: '*/20 * * * *'
   workflow_dispatch:  # Allow manual trigger from GitHub UI
 
 jobs:

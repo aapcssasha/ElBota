@@ -19,7 +19,7 @@ Automated ETH futures trading bot that:
 8. Manages positions (tracks opens/closes, monitors P/L, cancels stale orders)
 9. Generates candlestick charts with trading levels
 10. Sends analysis + chart to Discord webhook
-11. Runs automatically via GitHub Actions every 15 minutes
+11. Runs automatically via GitHub Actions every 20 minutes
 
 ---
 
@@ -27,7 +27,7 @@ Automated ETH futures trading bot that:
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│          FUTURES TRADING BOT FLOW (Every 15 min)        │
+│          FUTURES TRADING BOT FLOW (Every 20 min)        │
 └─────────────────────────────────────────────────────────┘
 
 1. LOAD STATE
@@ -133,7 +133,7 @@ Automated ETH futures trading bot that:
 ```
 
 **Important:**
-- GitHub Actions auto-commits this file every 15 minutes to persist state between runs
+- GitHub Actions auto-commits this file every 20 minutes to persist state between runs
 - `entry_order_id` tracks the entry order ID (for limit orders that may not fill immediately)
 - `stop_loss_order_id` and `take_profit_order_id` track pending orders on Coinbase
 - Many trades have `"note": "Closed externally (desync detected)"` - this means stop/target hit between bot runs
@@ -143,7 +143,7 @@ Automated ETH futures trading bot that:
 
 ## 🤖 GitHub Actions Automation
 
-**Runs:** Every 15 minutes (`cron: '*/15 * * * *'`)
+**Runs:** Every 20 minutes (`cron: '*/20 * * * *'`)
 **Platform:** ubuntu-latest with Python 3.13
 **Script:** `CoinbaseMain.py` (live futures trading)
 
@@ -166,7 +166,7 @@ Automated ETH futures trading bot that:
 
 ### Monitoring:
 - **Workflow runs:** https://github.com/aapcssasha/ElBota/actions
-- **Discord channel:** Gets notification every 15 minutes
+- **Discord channel:** Gets notification every 20 minutes
 - **positions.json:** Check GitHub for latest state
 
 ---
@@ -193,7 +193,7 @@ git push
 ```
 
 **Why pull first?**
-- GitHub Actions commits positions.json every 15 minutes
+- GitHub Actions commits positions.json every 20 minutes
 - If you don't pull, you'll have merge conflicts
 - Always sync before making changes
 
@@ -300,7 +300,7 @@ MAX_DISTANCE_PERCENT = 1.90  # Maximum 1.90% distance (keeps stops reasonable)
 - **If entry limit order never filled:** Cancels all orders without recording fake P/L
 - Bot calculates realized P/L from filled order prices
 - Records trade with note "Closed externally (desync detected)"
-- This catches stops/targets hit between 15-minute runs
+- This catches stops/targets hit between 20-minute runs
 - Preserves local entry price if API returns 0 (common API issue)
 
 ### Volume Filtering (Added 2025-10-12)
@@ -333,7 +333,7 @@ MAX_DISTANCE_PERCENT = 1.90  # Maximum 1.90% distance (keeps stops reasonable)
 - **For SHORT:** Check each candle's **low** for take-profit, then **high** for stop-loss
 - **Timeframe:** Only checks candles after entry_time
 - **Order matters:** Checks target first, then stop, in chronological order by candle
-- **Why:** Catches targets/stops hit between 15-minute runs and respects price action order
+- **Why:** Catches targets/stops hit between 20-minute runs and respects price action order
 
 **Example:** Entered long at $4,000 with target $4,020. If any candle between entry and now had high ≥ $4,020, target is hit (even if current price is $4,010).
 
@@ -350,7 +350,7 @@ MAX_DISTANCE_PERCENT = 1.90  # Maximum 1.90% distance (keeps stops reasonable)
 
 ### ChatGPT Prompt Strategy
 
-- **Model:** gpt-4o-mini (cheap, fast)
+- **Model:** gpt-5 (best reasoning, ~2.6 min response time, free with data sharing)
 - **Context:** 120 minutes of 1-min candles (OHLCV data)
 - **Focus:** SHORT-TERM SCALPING with strong technical levels
 - **Output:** Dual format
@@ -487,8 +487,9 @@ State machine prevents duplicates and handles direction changes:
 ### ✅ Live Trading
 - **Status:** Bot is actively trading with real money on Coinbase
 - **Product:** ET-31OCT25-CDE (ETH Futures)
-- **Automation:** GitHub Actions runs every 15 minutes
-- **Trading Stats:** 24 trades (12W/12L, 50% win rate, 8.06:1 avg W:L)
+- **Automation:** GitHub Actions runs every 20 minutes
+- **Model:** gpt-5 (better reasoning, ~2.6 min response time)
+- **Trading Stats:** 11 trades (6W/5L, 54.5% win rate, 0.71:1 avg W:L)
 - **Account Balance:** ~$192 (as of last check)
 
 ### 🎯 What's Working
@@ -500,14 +501,20 @@ State machine prevents duplicates and handles direction changes:
 - [x] Real-time balance tracking
 - [x] ChatGPT analysis integration with error handling
 - [x] Discord notifications with charts
-- [x] GitHub Actions automation (15-min intervals)
+- [x] GitHub Actions automation (20-min intervals)
 - [x] Trade level validation (stop distance, R:R, direction)
 - [x] Volume filtering (prevents low-volume trades)
 - [x] Performance metrics tracking (Avg W:L, Win Rate)
 - [x] Defensive response parsing (handles malformed ChatGPT responses)
 
-### 🔧 Recent Improvements (2025-10-12)
-- **MAJOR: Prompt Rewrite - Trend Following Only:**
+### 🔧 Recent Improvements (2025-10-13)
+- **NEW: Upgraded to gpt-5:**
+  - Switched from gpt-4o-mini to gpt-5 for better reasoning
+  - ~2.6 min response time (acts as "cooling off" period before trades)
+  - Free with OpenAI data sharing program (1M tokens/day)
+  - Added timing logs to monitor model performance
+  - Increased bot interval to 20 minutes (from 15 min) to accommodate gpt-5
+- **MAJOR: Prompt Rewrite - Trend Following Only (2025-10-12):**
   - Removed false breakout and support/resistance strategies (causing confusion)
   - ChatGPT now ONLY trades trend following with pullbacks
   - Must identify clear trend first (higher highs/lows OR lower highs/lows)
@@ -640,4 +647,4 @@ All API keys stored as GitHub Secrets (not visible in repo or logs).
 ---
 
 **Maintained By:** Alejandro + Claude Code
-**Version:** 4.3 (Trend Following Only + Limit Order Bug Fix + Volume Filtering)
+**Version:** 4.4 (gpt-5 Upgrade + 20-min Intervals + Timing Logs)
