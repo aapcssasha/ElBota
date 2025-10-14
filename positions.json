@@ -12,7 +12,7 @@
     "take_profit_order_id": null,
     "unrealized_pnl": null
   },
-  "last_signal": "sell",
+  "last_signal": "hold",
   "trade_history": [
     {
       "type": "long",
